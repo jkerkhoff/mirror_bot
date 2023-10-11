@@ -1,0 +1,5 @@
+/target
+/prod
+*.env
+*.db3
+*.tmp

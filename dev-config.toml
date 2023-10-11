@@ -1,0 +1,27 @@
+[database]
+path = "./dev-db.db3"
+
+[manifold]
+url = "https://dev.manifold.markets/"
+user_id = "Noji1vsEpIb7B7FRa42bbEZ26kA3"  # arrbit on dev
+
+[metaculus]
+fetch_criteria = true
+max_clones_per_day = 10
+add_group_ids = [
+    # "4b65902d-5e43-4573-97af-1b10aac92daa"  # we do a little testing
+]
+
+[metaculus.auto_filter]
+require_visible_community_prediction = true
+require_open = true
+exclude_resolved = true
+exclude_grouped = true
+min_forecasters = 30
+min_votes = 0
+min_days_to_resolution = 7
+max_days_to_resolution = 666
+max_last_active_days = 7
+max_age_days = 60
+max_confidence = 0.97
+
