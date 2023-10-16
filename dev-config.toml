@@ -3,7 +3,7 @@ path = "./dev-db.db3"
 
 [manifold]
 url = "https://dev.manifold.markets/"
-user_id = "Noji1vsEpIb7B7FRa42bbEZ26kA3"  # arrbit on dev
+user_id = "Lx20DndIKqYBDrAdJz5geUeZnRz1"  # mirrorbot on dev
 
 [metaculus]
 fetch_criteria = true
