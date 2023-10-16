@@ -5,6 +5,7 @@ use clap::Parser;
 mod args;
 mod commands;
 mod db;
+mod kalshi;
 mod managrams;
 mod manifold;
 mod metaculus;

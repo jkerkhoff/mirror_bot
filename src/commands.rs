@@ -6,7 +6,7 @@ use crate::args::{self, Commands, ListCommands};
 use crate::manifold::{self, SendManagramArgs};
 use crate::settings::Settings;
 use crate::types::QuestionSource;
-use crate::{db, log_if_err, managrams, metaculus, mirror};
+use crate::{db, log_if_err, kalshi, managrams, metaculus, mirror};
 
 pub(crate) fn run_command(
     config: Settings,
@@ -100,7 +100,21 @@ pub fn mirror_question(
             println!("Mirrored question:\n{:#?}", row);
         }
         QuestionSource::Kalshi => {
-            bail!("Kalshi mirroring hasn't been implemented yet");
+            let kalshi_question = kalshi::get_question(&client, &id, config)
+                .with_context(|| "failed to fetch question from Kalshi")?;
+            if kalshi_question.is_resolved() {
+                if allow_resolved {
+                    warn!("question has already resolved");
+                } else {
+                    return Err(anyhow!("question has already resolved"));
+                }
+            }
+            // let question = (&kalshi_question)
+            //     .try_into()
+            //     .with_context(|| "failed to convert Kalshi question to common format")?;
+            // let row = mirror::mirror_question(&client, &db, &question, config)?;
+            // println!("Mirrored question:\n{:#?}", row);
+            println!("So far so good!");
         }
         QuestionSource::Polymarket => {
             bail!("Polymarket mirroring hasn't been implemented yet");
