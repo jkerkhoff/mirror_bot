@@ -109,11 +109,11 @@ pub fn mirror_question(
                     return Err(anyhow!("question has already resolved"));
                 }
             }
-            // let question = (&kalshi_question)
-            //     .try_into()
-            //     .with_context(|| "failed to convert Kalshi question to common format")?;
-            // let row = mirror::mirror_question(&client, &db, &question, config)?;
-            // println!("Mirrored question:\n{:#?}", row);
+            let question = (&kalshi_question)
+                .try_into()
+                .with_context(|| "failed to convert Kalshi question to common format")?;
+            let row = mirror::mirror_question(&client, &db, &question, config)?;
+            println!("Mirrored question:\n{:#?}", row);
             println!("So far so good!");
         }
         QuestionSource::Polymarket => {
