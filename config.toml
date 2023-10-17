@@ -1,6 +1,11 @@
 [database]
 path = "./prod-db.db3"
 
+[kalshi]
+add_group_ids = [
+    "krovXmDn6rCdoiJjbe7R", # Kalshi
+]
+
 [manifold]
 url = "https://manifold.markets/"
 api_key = "SECRET"  # overridden by MB_MANIFOLD.API_KEY env variable
@@ -58,4 +63,3 @@ max_last_active_days = 90
 max_age_days = 36525
 max_confidence = 0.97
 exclude_ids = []
-

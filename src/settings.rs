@@ -13,6 +13,11 @@ pub struct Database {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct Kalshi {
+    pub add_group_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct MarketTemplate {
     pub description_footer: String,
     pub title_retain_end_characters: usize,
@@ -69,6 +74,7 @@ pub struct Metaculus {
 #[derive(Debug, Deserialize)]
 pub struct Settings {
     pub database: Database,
+    pub kalshi: Kalshi,
     pub manifold: Manifold,
     pub metaculus: Metaculus,
 }
