@@ -124,6 +124,14 @@ pub fn sync(
     let client = Client::new();
     let db = db::open(&config)?;
 
+    if manifold_self || all {
+        log_if_err!(mirror::sync_manifold_to_db(&client, &db, config));
+    }
+
+    if manifold_other || all {
+        log_if_err!(mirror::sync_third_party_mirrors(&client, &db, config));
+    }
+
     if metaculus || all {
         log_if_err!(mirror::sync_resolutions_to_manifold(
             &client,
@@ -135,14 +143,6 @@ pub fn sync(
 
     if managrams || all {
         log_if_err!(managrams::sync_managrams(&client, &db, config));
-    }
-
-    if manifold_self || all {
-        log_if_err!(mirror::sync_manifold_to_db(&client, &db, config));
-    }
-
-    if manifold_other || all {
-        log_if_err!(mirror::sync_third_party_mirrors(&client, &db, config));
     }
 
     Ok(())
