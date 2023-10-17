@@ -37,8 +37,26 @@ impl KalshiQuestion {
 
     pub fn full_url(&self) -> String {
         // TODO: grab base from config (consistent with manifold)?
-        // Don't think there even is a public dev instance though.
         format!("https://kalshi.com/markets/{}", self.event.series_ticker)
+    }
+
+    pub fn get_criteria_and_sources(&self) -> String {
+        format!("{}{}", self.event.underlying, self.get_resolution_sources_markdown())
+    }
+
+    pub fn get_resolution_sources_markdown(&self) -> String {
+        let sources = self
+            .event
+            .settlement_sources
+            .iter()
+            .map(|source| format!("<{}>", source.url.clone()))
+            .collect::<Vec<String>>();
+
+        // Return "" if there are none
+        if sources.is_empty() {
+            return "".to_string();
+        }
+        format!("\n\n\n**Resolution sources**\n\n{}", sources.join(", "))
     }
 }
 
@@ -51,7 +69,7 @@ impl TryInto<Question> for &KalshiQuestion {
             source_url: self.full_url(),
             source_id: self.id.clone(),
             question: self.get_market().title.clone(),
-            criteria: Some(self.event.underlying.clone()),
+            criteria: Some(self.get_criteria_and_sources()),
             end_date: self.get_market().expiration_date,
         })
     }
@@ -70,7 +88,14 @@ pub struct KalshiQuestion {
 pub struct Event {
     pub series_ticker: String,
     pub markets: Vec<Market>,
+    pub settlement_sources: Vec<SettlementSource>,
     pub underlying: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct SettlementSource {
+    pub name: String,
+    pub url: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
