@@ -449,11 +449,17 @@ impl CreateMarketArgs {
 
     fn description_from_question(question: &Question, config: &Settings) -> String {
         let tmpl = &config.manifold.template;
+        let embed = if let Some(embed_html) = &question.embed_html() {
+            format!("\n\n{}", embed_html)
+        } else {
+            "".to_owned()
+        };
         let mut description = format!(
-            "### {title}\n\nResolves the same as [the original on {source}]({url}).\n\n---\n\n",
+            "### {title}\n\nResolves the same as [the original on {source}]({url}).{embed}\n\n---\n\n",
             title = question.question,
             source = question.source,
             url = question.source_url,
+            embed = embed,
         );
         if let Some(criteria) = &question.criteria {
             description.push_str(&format!(

@@ -30,6 +30,22 @@ pub enum QuestionSource {
     Polymarket,
 }
 
+impl Question {
+    pub fn embed_html(&self) -> Option<String> {
+        match self.source {
+            QuestionSource::Metaculus => {
+                Some(format!( 
+                    "<iframe src=\"https://www.metaculus.com/questions/question_embed/{}/?theme=dark\" \
+                    style=\"height:430px; width:100%; max-width:550px\"></iframe>",
+                    self.source_id
+                ))
+            }
+            QuestionSource::Kalshi => None,
+            QuestionSource::Polymarket => None,
+        }
+    }
+}
+
 impl Display for QuestionSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
