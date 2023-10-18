@@ -14,6 +14,10 @@ use crate::settings::Settings;
 use crate::types::{BinaryResolution, Question, QuestionSource};
 
 pub fn get_question(client: &Client, id: &str, config: &Settings) -> Result<KalshiQuestion> {
+    // The Kalshi api requires the id (ticker) to be uppercase. Their frontend
+    // uses lowercase by default, but redirects given uppercase. Use
+    // uppercase to be safe.
+    let id = id.to_uppercase();
     debug!("get_question called (id: {})", id);
     let mut question = client.get(format!("https://trading-api.kalshi.com/v1/events/{}/", id))
         .send()?
@@ -28,6 +32,7 @@ impl KalshiQuestion {
             .markets
             .iter()
             .find(|market| market.ticker_name == self.id)
+            .with_context(|| format!("Could not find market in series {} with ticker_name {}", self.id, self.id))
             .unwrap()
     }
 
