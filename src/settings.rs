@@ -14,7 +14,29 @@ pub struct Database {
 
 #[derive(Debug, Deserialize)]
 pub struct Kalshi {
+    pub auto_filter: KalshiQuestionRequirements,
     pub add_group_ids: Vec<String>,
+    pub max_clones_per_day: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct KalshiQuestionRequirements {
+    pub require_open: bool,
+    pub exclude_resolved: bool,
+    pub exclude_series: bool,
+    pub min_days_to_resolution: i64,
+    pub max_days_to_resolution: i64,
+    pub min_volume: i64,
+    pub min_recent_volume: i64,
+    pub min_open_interest: i64,
+    pub min_dollar_volume: i64,
+    pub min_dollar_recent_volume: i64,
+    pub min_dollar_open_interest: i64,
+    pub min_liquidity: i64,
+    pub max_age_days: i64,
+    /// exclude question if community forecast puts a high probability on YES or NO
+    pub max_confidence: i64,
+    pub exclude_ids: HashSet<String>,
 }
 
 #[derive(Debug, Deserialize)]

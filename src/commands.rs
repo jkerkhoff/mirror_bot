@@ -114,7 +114,6 @@ pub fn mirror_question(
                 .with_context(|| "failed to convert Kalshi question to common format")?;
             let row = mirror::mirror_question(&client, &db, &question, config)?;
             println!("Mirrored question:\n{:#?}", row);
-            println!("So far so good!");
         }
         QuestionSource::Polymarket => {
             bail!("Polymarket mirroring hasn't been implemented yet");
@@ -167,9 +166,7 @@ pub fn auto_mirror(config: &Settings, source: QuestionSource, dry_run: bool) -> 
     let db = db::open(&config)?;
     match source {
         QuestionSource::Metaculus => mirror::auto_mirror_metaculus(&client, &db, config, dry_run)?,
-        QuestionSource::Kalshi => {
-            todo!()
-        }
+        QuestionSource::Kalshi => mirror::auto_mirror_kalshi(&client, &db, config, dry_run)?,
         QuestionSource::Polymarket => {
             todo!()
         }

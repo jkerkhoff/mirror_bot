@@ -10,6 +10,7 @@ use crate::{
     log_if_err,
     manifold::{self, CreateMarketArgs, ManifoldMarket},
     metaculus::{self, MetaculusQuestion},
+    kalshi::{self, KalshiQuestion},
     settings::Settings,
     types::{BinaryResolution, Question, QuestionSource},
 };
@@ -50,6 +51,25 @@ pub fn mirror_question(
 
 /// Attempt to mirror a metaculus question.
 /// Does not check configurable question requirements.
+pub fn mirror_kalshi_question(
+    client: &Client,
+    db: &rusqlite::Connection,
+    config: &Settings,
+    kalshi_question: &KalshiQuestion,
+) -> Result<MirrorRow, MirrorError> {
+    debug!(
+        "Attempting to mirror kalshi question with id {} (\"{}\")",
+        kalshi_question.id, kalshi_question.title()
+    );
+    let kalshi_question = kalshi::get_question(client, &kalshi_question.id.to_string(), config).unwrap();
+    let question: Question = (&kalshi_question)
+        .try_into()
+        .with_context(|| "failed to convert Kalshi question to common format")?;
+    Ok(mirror_question(client, db, &question, config)?)
+}
+
+/// Attempt to mirror a metaculus question.
+/// Does not check configurable question requirements.
 pub fn mirror_metaculus_question(
     client: &Client,
     db: &rusqlite::Connection,
@@ -71,6 +91,66 @@ pub fn mirror_metaculus_question(
         .try_into()
         .with_context(|| "failed to convert Metaculus question to common format")?;
     Ok(mirror_question(client, db, &question, config)?)
+}
+
+/// Automatically pick and mirror Kalshi questions based on config.
+pub fn auto_mirror_kalshi(
+    client: &Client,
+    db: &rusqlite::Connection,
+    config: &Settings,
+    dry_run: bool,
+) -> Result<(), MirrorError> {
+    // TODO: this should be cleaned up in general
+    let existing_clones = db::get_unresolved_mirrors(db, Some(QuestionSource::Kalshi))?;
+    let candidates: Vec<KalshiQuestion> = kalshi::get_mirror_candidates(client, config)?
+        .into_iter()
+        .filter(|q| {
+            db::get_any_mirror(db, &QuestionSource::Kalshi, &q.id.to_string())
+                .unwrap() // TODO: handle error?
+                .is_none()
+        })
+        .collect();
+    info!(
+        "Obtained {} candidates for cloning from Kalshi",
+        candidates.len()
+    );
+    let clone_count_today = existing_clones
+        .iter()
+        .filter(|m| m.clone_date > Utc::now() - Duration::days(1))
+        .count();
+    let remaining_budget = config.kalshi.max_clones_per_day
+        - clone_count_today.min(config.kalshi.max_clones_per_day); // TODO: might want to write a query for this?
+    info!(
+        "Cloned {} kalshi questions in last 24 hours. Remaining budget: {}",
+        clone_count_today, remaining_budget
+    );
+    let to_clone_count = remaining_budget.min(candidates.len());
+    info!("Attempting to clone top {} candidates", to_clone_count);
+    for kalshi_question in candidates.into_iter().take(to_clone_count) {
+        if dry_run {
+            info!(
+                "dry run -> skipping clone of question with id {}, ({}, {})",
+                kalshi_question.id,
+                kalshi_question.title(),
+                kalshi_question.full_url()
+            );
+            continue;
+        }
+        match mirror_kalshi_question(client, db, config, &kalshi_question).with_context(
+            || {
+                format!(
+                    "failed to mirror question with id {} (\"{}\")",
+                    kalshi_question.id, kalshi_question.title()
+                )
+            },
+        ) {
+            Ok(market) => {
+                info!("Created a mirror:\n{:#?}", market);
+            }
+            Err(e) => error!("{:#}", e),
+        }
+    }
+    Ok(())
 }
 
 /// Automatically pick and mirror Metaculus questions based on config.
