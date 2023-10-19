@@ -3,3 +3,4 @@
 *.env
 *.db3
 *.tmp
+.vscode/
