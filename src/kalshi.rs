@@ -203,7 +203,25 @@ impl KalshiQuestion {
     }
 
     pub fn get_criteria_and_sources(&self) -> String {
-        format!("{}{}", self.event.underlying, self.get_resolution_sources_markdown())
+        format!("{}{}", self.format_underlying_rulebook_variables(), self.get_resolution_sources_markdown())
+    }
+
+    pub fn format_underlying_rulebook_variables(&self) -> String {
+        let mut return_string = self.event.underlying.clone();
+        // For each variable in market.rulebook_variables, substitute ||variable|| with the value of the variable
+        let rulebook = self.get_market().rulebook_variables.clone();
+        // For each key in rulebook
+        for key in rulebook.as_object().unwrap().keys() {
+            // Remove the surrounding "" marks
+            let mut replacement_value = rulebook[key].to_string();
+            replacement_value = replacement_value[1..replacement_value.len()-1].to_string();
+
+            // We've seen instances with and without spaces
+            return_string = return_string.replace(&format!("||{}||", key), &replacement_value);
+            return_string = return_string.replace(&format!("|| {} ||", key), &replacement_value);
+        }
+        return return_string
+
     }
 
     pub fn get_resolution_sources_markdown(&self) -> String {
@@ -282,6 +300,7 @@ pub struct Market {
     pub dollar_recent_volume: i64,
     pub dollar_open_interest: i64,
     pub liquidity: i64,
+    pub rulebook_variables: serde_json::Value,
 }
 
 
