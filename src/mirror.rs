@@ -231,6 +231,28 @@ fn resolve_mirror(
     Ok(())
 }
 
+/// Check if Kalshi question has resolved and sync resolution to mirror.
+fn sync_kalshi_mirror(
+    client: &Client,
+    db: &rusqlite::Connection,
+    mirror: &MirrorRow,
+    config: &Settings,
+) -> Result<bool, MirrorError> {
+    assert!(mirror.source == QuestionSource::Kalshi);
+    let kalshi_question = kalshi::get_question(client, &mirror.source_id, config)?;
+    if let Some(resolution) = kalshi_question.get_binary_resolution()? {
+        info!(
+            "Kalshi question \"{}\" (source id: {}) has resolved {:?}. Syncing.",
+            mirror.question, mirror.source_id, resolution
+        );
+        resolve_mirror(client, db, &mirror, resolution, config)?;
+        Ok(true)
+    } else {
+        debug!("Source has not resolved yet");
+        Ok(false)
+    }
+}
+
 /// Check if Metaculus question has resolved and sync resolution to mirror.
 fn sync_metaculus_mirror(
     client: &Client,
@@ -268,7 +290,9 @@ fn sync_mirror(
         crate::types::QuestionSource::Metaculus => {
             sync_metaculus_mirror(client, db, &mirror, config)?
         }
-        crate::types::QuestionSource::Kalshi => todo!(),
+        crate::types::QuestionSource::Kalshi => {
+            sync_kalshi_mirror(client, db, &mirror, config)?
+        }
         crate::types::QuestionSource::Polymarket => todo!(),
     })
 }

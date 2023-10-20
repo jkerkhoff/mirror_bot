@@ -20,6 +20,7 @@ pub(crate) fn run_command(
             allow_resolved,
         } => mirror_question(&config, source, id, allow_resolved),
         Commands::Sync {
+            kalshi,
             metaculus,
             managrams,
             manifold_self,
@@ -27,6 +28,7 @@ pub(crate) fn run_command(
             all,
         } => sync(
             &config,
+            kalshi,
             metaculus,
             managrams,
             manifold_self,
@@ -124,13 +126,14 @@ pub fn mirror_question(
 
 pub fn sync(
     config: &Settings,
+    kalshi: bool,
     metaculus: bool,
     managrams: bool,
     manifold_self: bool,
     manifold_other: bool,
     all: bool,
 ) -> Result<()> {
-    if !(metaculus || managrams || manifold_self || manifold_other || all) {
+    if !(kalshi || metaculus || managrams || manifold_self || manifold_other || all) {
         bail!("Provide at least one sync target.");
     }
 
@@ -143,6 +146,15 @@ pub fn sync(
 
     if manifold_other || all {
         log_if_err!(mirror::sync_third_party_mirrors(&client, &db, config));
+    }
+
+    if kalshi || all {
+        log_if_err!(mirror::sync_resolutions_to_manifold(
+            &client,
+            &db,
+            config,
+            Some(QuestionSource::Kalshi)
+        ));
     }
 
     if metaculus || all {

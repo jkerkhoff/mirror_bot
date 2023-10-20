@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::settings::{KalshiQuestionRequirements, Settings};
-use crate::types::{Question, QuestionSource};
+use crate::types::{BinaryResolution, Question, QuestionSource};
 
 fn list_questions(
     client: &Client,
@@ -24,7 +24,6 @@ pub fn get_question(client: &Client, id: &str, _config: &Settings) -> Result<Kal
     // uses lowercase by default, but redirects given uppercase. Use
     // uppercase to be safe.
     let id = id.to_uppercase();
-    debug!("get_question called (id: {})", id);
     let mut question = client.get(format!("https://trading-api.kalshi.com/v1/events/{}/", id))
         .send()?
         .json::<KalshiQuestion>()?;
@@ -238,6 +237,19 @@ impl KalshiQuestion {
         }
         format!("\n\n\n**Resolution sources**\n\n{}", sources.join(", "))
     }
+
+    pub fn get_binary_resolution(&self) -> Result<Option<BinaryResolution>> {
+        if self.is_resolved() {
+            match self.get_market().result {
+                Some(KalshiResult::Yes) => Ok(Some(BinaryResolution::Yes)),
+                Some(KalshiResult::No) => Ok(Some(BinaryResolution::No)),
+                Some(KalshiResult::StillOpen) => Ok(None),
+                None => Ok(None),
+            }
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 impl TryInto<Question> for &KalshiQuestion {
@@ -316,11 +328,10 @@ pub enum Status {
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum KalshiResult {
-    //todo all options
     Yes,
     No,
     #[serde(rename = "")]
-    None,
+    StillOpen,
 }
 
 #[derive(Serialize, Debug, Default)]

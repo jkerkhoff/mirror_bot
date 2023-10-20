@@ -39,6 +39,9 @@ pub enum Commands {
     /// Sync source resolutions to Manifold
     #[command()]
     Sync {
+        /// Sync Kalshi resolutions to manifold
+        #[arg(short = 'k', long = "kalshi")]
+        kalshi: bool,
         /// Sync Metaculus resolutions to manifold
         #[arg(short = 'm', long = "metaculus")]
         metaculus: bool,
