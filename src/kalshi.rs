@@ -139,8 +139,8 @@ pub fn check_event_requirements(
             threshold: requirements.max_age_days,
         });
     }
-    if (100 - question.get_market().yes_ask) > requirements.max_confidence * 100
-    || question.get_market().yes_bid > requirements.max_confidence * 100 {
+    if (100 - question.get_market().yes_ask) as f64 > requirements.max_confidence * 100.0
+    || question.get_market().yes_bid as f64 > requirements.max_confidence * 100.0 {
         return Err(KalshiCheckFailure::TooExtreme {
             yes_ask: question.get_market().yes_ask,
             yes_bid: question.get_market().yes_bid,
@@ -150,6 +150,20 @@ pub fn check_event_requirements(
     if requirements.exclude_ids.contains(&question.id) {
         return Err(KalshiCheckFailure::Banned);
     }
+
+    println!("Passed all Kalshi checks URL: {}, liq {}, bid/ask {}/{}, volume {} (${}), recent volume {} (${}), open interest {} (${})",
+        question.full_url(),
+        question.get_market().liquidity,
+        question.get_market().yes_bid,
+        question.get_market().yes_ask,
+        question.get_market().volume,
+        question.get_market().dollar_volume,
+        question.get_market().recent_volume,
+        question.get_market().dollar_recent_volume,
+        question.get_market().open_interest,
+        question.get_market().dollar_open_interest
+    );
+    return Err(KalshiCheckFailure::Banned);
 
     Ok(())
 }
@@ -369,7 +383,7 @@ pub enum KalshiCheckFailure {
     #[error("question opened {age_days} days ago, and the maximum is {threshold}")]
     TooOld { age_days: i64, threshold: i64 },
     #[error("The orderbook has bids at {yes_bid}, asks at {yes_ask}, and the maximum confidence is {threshold}")]
-    TooExtreme { yes_bid: i64, yes_ask: i64, threshold: i64 },
+    TooExtreme { yes_bid: i64, yes_ask: i64, threshold: f64 },
     #[error("question has already resolved")]
     Resolved,
     #[error("question is banned in config")]

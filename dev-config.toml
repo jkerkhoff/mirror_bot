@@ -8,20 +8,6 @@ add_group_ids = [
 ]
 
 [kalshi.auto_filter]
-require_open = true
-exclude_resolved = true
-exclude_series = true
-min_liquidity = 0
-min_volume = 0
-min_recent_volume = 0
-min_open_interest = 0
-min_dollar_volume = 0
-min_dollar_recent_volume = 0
-min_dollar_open_interest = 0
-min_days_to_resolution = 2
-max_days_to_resolution = 4000
-max_age_days = 365
-max_confidence = 0.94
 exclude_ids = []
 
 [manifold]

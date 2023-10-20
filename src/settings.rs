@@ -35,7 +35,7 @@ pub struct KalshiQuestionRequirements {
     pub min_liquidity: i64,
     pub max_age_days: i64,
     /// exclude question if community forecast puts a high probability on YES or NO
-    pub max_confidence: i64,
+    pub max_confidence: f64,
     pub exclude_ids: HashSet<String>,
 }
 
