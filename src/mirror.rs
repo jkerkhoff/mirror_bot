@@ -21,6 +21,8 @@ pub enum MirrorError {
     #[error("Question has already been mirrored at {}", .0.manifold_url)]
     AlreadyMirrored(MirrorRow),
     #[error(transparent)]
+    KalshiError(#[from] kalshi::KalshiError),
+    #[error(transparent)]
     ManifoldError(#[from] manifold::ManifoldError),
     #[error(transparent)]
     Other(#[from] anyhow::Error),

@@ -1,8 +1,10 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
-use log::{debug, info};
-use reqwest::blocking::Client;
+use log::info;
+use reqwest::blocking::{Client, Response};
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 use crate::settings::{KalshiQuestionRequirements, Settings};
@@ -11,24 +13,23 @@ use crate::types::{BinaryResolution, Question, QuestionSource};
 fn list_questions(
     client: &Client,
     params: KalshiListQuestionsParams,
-) -> Result<KalshiQuestionsResponse> {
-    debug!("kalshi::list_questions called"); // (params: {:?})", params);
-    Ok(client.get("https://trading-api.kalshi.com/v1/events/")
-    .query(&params)
-    .send()?
-    .json()?)
+) -> Result<KalshiQuestionsResponse, KalshiError> {
+    info!("kalshi::list_questions called"); // (params: {:?})", params);
+    let resp = client.get("https://trading-api.kalshi.com/v1/events/")
+        .query(&params)
+        .send()?;
+    parse_response(resp)
 }
 
-pub fn get_question(client: &Client, id: &str, _config: &Settings) -> Result<KalshiQuestion> {
+pub fn get_question(client: &Client, id: &str, _config: &Settings) -> Result<KalshiQuestion, KalshiError> {
     // The Kalshi api requires the id (ticker) to be uppercase. Their frontend
     // uses lowercase by default, but redirects given uppercase. Use
-    // uppercase to be safe.
-    let id = id.to_uppercase();
-    let mut question = client.get(format!("https://trading-api.kalshi.com/v1/events/{}/", id))
-        .send()?
-        .json::<KalshiQuestion>()?;
-    question.id = id.to_string();
-    Ok(question)
+    // uppercase to be safe. Also filter to the characters used in Kalshi
+    // tickers: alphanumeric and "-" and "."
+    let id = id.to_uppercase().chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '.').collect::<String>();
+    let resp = client.get(format!("https://trading-api.kalshi.com/v1/events/{}/", id))
+        .send()?;
+    parse_response(resp)
 }
 
 pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<KalshiQuestion>> {
@@ -166,6 +167,22 @@ pub fn check_event_requirements(
     return Err(KalshiCheckFailure::Banned);
 
     Ok(())
+}
+
+/// helper function for parsing both success and error responses
+fn parse_response<T: DeserializeOwned>(resp: Response) -> Result<T, KalshiError> {
+    if resp.status().is_success() {
+        match resp.json() {
+            Ok(r) => Ok(r),
+            Err(_) => Err(KalshiError::UnexpectedResponseType), // TODO: wrap inner?
+        }
+    } else {
+        let status = resp.status();
+        let error_resp: KalshiErrorResponse = resp
+            .json()
+            .map_err(|_| KalshiError::UnexpectedErrorType(status))?;
+        Err(KalshiError::ErrorResponse(status, error_resp))
+    }
 }
 
 impl KalshiQuestion {
@@ -388,4 +405,31 @@ pub enum KalshiCheckFailure {
     Resolved,
     #[error("question is banned in config")]
     Banned,
+}
+
+#[derive(Error, Debug)]
+pub enum KalshiError {
+    #[error("failed to parse error response from Kalshi")]
+    UnexpectedErrorType(StatusCode),
+    #[error("failed to parse success response from Kalshi")]
+    UnexpectedResponseType,
+    // TODO: split out concrete errors
+    #[error("error response ({}) from Kalshi: {}", .0, .1.error.message)]
+    ErrorResponse(StatusCode, KalshiErrorResponse),
+    #[error(transparent)]
+    ReqwestError(#[from] reqwest::Error),
+    // #[error(transparent)]
+    // Other(#[from] anyhow::Error),
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KalshiErrorResponse {
+    error: Error,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Error {
+    message: String,
 }
