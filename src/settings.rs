@@ -22,6 +22,7 @@ pub struct Kalshi {
 #[derive(Debug, Deserialize)]
 pub struct KalshiQuestionRequirements {
     pub require_open: bool,
+    pub page_size: i64,
     /// There are some events that use the same series ticker to group
     /// events. (Not to be confused with each event containing multiple
     /// markets for e.g. different price points of an asset.) For the most
@@ -44,7 +45,8 @@ pub struct KalshiQuestionRequirements {
     pub min_dollar_open_interest: i64,
     pub min_liquidity: i64,
     pub max_age_days: i64,
-    /// exclude question if community forecast puts a high probability on YES or NO
+    /// exclude question if yes_ask is too low or yes_bid is too high, such that
+    /// the probability of YES is too extreme to be interesting
     pub max_confidence: f64,
     pub exclude_ids: HashSet<String>,
 }

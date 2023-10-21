@@ -12,9 +12,9 @@ use crate::types::{BinaryResolution, Question, QuestionSource};
 
 fn list_questions(
     client: &Client,
-    params: KalshiListQuestionsParams,
+    params: &KalshiListQuestionsParams,
 ) -> Result<KalshiQuestionsResponse, KalshiError> {
-    info!("kalshi::list_questions called"); // (params: {:?})", params);
+    info!("kalshi::list_questions called (page {})", params.page_number.unwrap_or(1));
     let resp = client.get("https://trading-api.kalshi.com/v1/events/")
         .query(&params)
         .send()?;
@@ -42,9 +42,24 @@ pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<K
         params.status = Some("open".to_string()); // TODO: use enum?
     }
     params.single_event_per_series = Some(requirements.single_event_per_series);
-    let questions = list_questions(client, params)
-        .with_context(|| "failed to fetch questions from kalshi")?
-        .events
+    params.page_size = Some(requirements.page_size);
+    let mut events = Vec::new();
+    for page_number in 1..100 {
+        // Set page_number in params
+        params.page_number = Some(page_number);
+        let resp = list_questions(client, &params)?;
+        // single_event_per_series, and perhaps other filtering parameters, are
+        // applied after the server limits to page_size, such that fewer events
+        // than page_size may be returned. Strictly speaking, checking for len()
+        // == 0 is not sufficient to know there are no more events on later
+        // pages, but it's a good enough heuristic.
+        if resp.events.len() == 0 {
+            break;
+        }
+        events.extend(resp.events.into_iter());
+    }
+    info!("{} events listed via Kalshi API", events.len());
+    let questions = events
         .into_iter()
         .map(|event| KalshiQuestion {
             id: event.ticker.clone(),
@@ -152,8 +167,9 @@ pub fn check_event_requirements(
         return Err(KalshiCheckFailure::Banned);
     }
 
-    println!("Passed all Kalshi checks URL: {}, liq {}, bid/ask {}/{}, volume {} (${}), recent volume {} (${}), open interest {} (${})",
+    println!("Passed all Kalshi checks URL: {} ({}), liq {}, bid/ask {}/{}, volume {} (${}), recent volume {} (${}), open interest {} (${})",
         question.full_url(),
+        question.id,
         question.get_market().liquidity,
         question.get_market().yes_bid,
         question.get_market().yes_ask,
@@ -369,6 +385,8 @@ pub enum KalshiResult {
 pub struct KalshiListQuestionsParams {
     pub status: Option<String>,
     pub single_event_per_series: Option<bool>,
+    pub page_size: Option<i64>,
+    pub page_number: Option<i64>,
 }
 
 #[derive(Error, Debug)]
