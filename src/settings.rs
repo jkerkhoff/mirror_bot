@@ -22,6 +22,16 @@ pub struct Kalshi {
 #[derive(Debug, Deserialize)]
 pub struct KalshiQuestionRequirements {
     pub require_open: bool,
+    /// There are some events that use the same series ticker to group
+    /// events. (Not to be confused with each event containing multiple
+    /// markets for e.g. different price points of an asset.) For the most
+    /// part, only one event of a series is open at once, and in those cases
+    /// this parameter changes nothing.
+    /// One example where there are multiple open markets is TERMINALRATE,
+    /// seen here: https://kalshi.com/markets/TERMINALRATE. In these cases,
+    /// single_event_per_series appears to return the event/markets that
+    /// appear by default on the frontend. (TERMINALRATE-23DEC31B)
+    pub single_event_per_series: bool,
     pub exclude_resolved: bool,
     pub exclude_series: bool,
     pub min_days_to_resolution: i64,

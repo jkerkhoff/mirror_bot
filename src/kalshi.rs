@@ -36,12 +36,12 @@ pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<K
     info!("Fetching mirror candidates from Kalshi");
     let requirements = &config.kalshi.auto_filter;
     let mut params = KalshiListQuestionsParams {
-        single_event_per_series: Some(true),
         ..Default::default()
     };
     if requirements.require_open {
         params.status = Some("open".to_string()); // TODO: use enum?
     }
+    params.single_event_per_series = Some(requirements.single_event_per_series);
     let questions = list_questions(client, params)
         .with_context(|| "failed to fetch questions from kalshi")?
         .events
