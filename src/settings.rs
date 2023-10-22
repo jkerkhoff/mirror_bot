@@ -28,10 +28,15 @@ pub struct KalshiQuestionRequirements {
     /// markets for e.g. different price points of an asset.) For the most
     /// part, only one event of a series is open at once, and in those cases
     /// this parameter changes nothing.
-    /// One example where there are multiple open markets is TERMINALRATE,
-    /// seen here: https://kalshi.com/markets/TERMINALRATE. In these cases,
+    ///
+    /// One example where there are multiple open markets is RATECUT,
+    /// seen here: https://kalshi.com/markets/RATECUT. In these cases,
     /// single_event_per_series appears to return the event/markets that
-    /// appear by default on the frontend. (TERMINALRATE-23DEC31B)
+    /// appear by default on the frontend. (RATECUT-23DEC31)
+    ///
+    /// I think false is a sensible default. At time of writing in the RATECUT
+    /// case, the 2023 version is probably NO, but it has 2024 versions that
+    /// are still up in the air and getting attention from traders.
     pub single_event_per_series: bool,
     pub exclude_resolved: bool,
     pub exclude_series: bool,

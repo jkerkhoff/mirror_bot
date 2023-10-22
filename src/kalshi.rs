@@ -167,9 +167,8 @@ pub fn check_event_requirements(
         return Err(KalshiCheckFailure::Banned);
     }
 
-    println!("Passed all Kalshi checks URL: {} ({}), liq {}, bid/ask {}/{}, volume {} (${}), recent volume {} (${}), open interest {} (${})",
+    println!("Passed all Kalshi checks URL: {}, liq {}, bid/ask {}/{}, volume {} (${}), recent volume {} (${}), open interest {} (${})",
         question.full_url(),
-        question.id,
         question.get_market().liquidity,
         question.get_market().yes_bid,
         question.get_market().yes_ask,
@@ -241,7 +240,7 @@ impl KalshiQuestion {
 
     pub fn full_url(&self) -> String {
         // TODO: grab base from config (consistent with manifold)?
-        format!("https://kalshi.com/markets/{}", self.event.series_ticker)
+        format!("https://kalshi.com/markets/{}#{}", self.event.series_ticker, self.id)
     }
 
     pub fn title(&self) -> String {
