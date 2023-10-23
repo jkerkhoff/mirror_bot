@@ -10,7 +10,7 @@ use crate::{
     log_if_err,
     manifold::{self, CreateMarketArgs, ManifoldMarket},
     metaculus::{self, MetaculusQuestion},
-    kalshi::{self, KalshiQuestion},
+    kalshi::{self, KalshiMarket},
     settings::Settings,
     types::{BinaryResolution, Question, QuestionSource},
 };
@@ -57,14 +57,14 @@ pub fn mirror_kalshi_question(
     client: &Client,
     db: &rusqlite::Connection,
     config: &Settings,
-    kalshi_question: &KalshiQuestion,
+    kalshi_market: &KalshiMarket,
 ) -> Result<MirrorRow, MirrorError> {
     debug!(
         "Attempting to mirror kalshi question with id {} (\"{}\")",
-        kalshi_question.id, kalshi_question.title()
+        kalshi_market.id(), kalshi_market.title()
     );
-    let kalshi_question = kalshi::get_question(client, &kalshi_question.id.to_string(), config).unwrap();
-    let question: Question = (&kalshi_question)
+    let kalshi_market = kalshi::get_question(client, &kalshi_market.id(), config).unwrap();
+    let question: Question = (&kalshi_market)
         .try_into()
         .with_context(|| "failed to convert Kalshi question to common format")?;
     Ok(mirror_question(client, db, &question, config)?)
@@ -104,10 +104,10 @@ pub fn auto_mirror_kalshi(
 ) -> Result<(), MirrorError> {
     // TODO: this should be cleaned up in general
     let existing_clones = db::get_unresolved_mirrors(db, Some(QuestionSource::Kalshi))?;
-    let candidates: Vec<KalshiQuestion> = kalshi::get_mirror_candidates(client, config)?
+    let candidates: Vec<KalshiMarket> = kalshi::get_mirror_candidates(client, config)?
         .into_iter()
         .filter(|q| {
-            db::get_any_mirror(db, &QuestionSource::Kalshi, &q.id.to_string())
+            db::get_any_mirror(db, &QuestionSource::Kalshi, &q.id())
                 .unwrap() // TODO: handle error?
                 .is_none()
         })
@@ -132,7 +132,7 @@ pub fn auto_mirror_kalshi(
         if dry_run {
             info!(
                 "dry run -> skipping clone of question with id {}, ({}, {})",
-                kalshi_question.id,
+                kalshi_question.id(),
                 kalshi_question.title(),
                 kalshi_question.full_url()
             );
@@ -142,7 +142,7 @@ pub fn auto_mirror_kalshi(
             || {
                 format!(
                     "failed to mirror question with id {} (\"{}\")",
-                    kalshi_question.id, kalshi_question.title()
+                    kalshi_question.id(), kalshi_question.title()
                 )
             },
         ) {

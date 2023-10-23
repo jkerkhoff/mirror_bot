@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Result, anyhow};
 use chrono::{DateTime, Duration, Utc};
 use log::info;
 use reqwest::blocking::{Client, Response};
@@ -13,7 +13,7 @@ use crate::types::{BinaryResolution, Question, QuestionSource};
 fn list_questions(
     client: &Client,
     params: &KalshiListQuestionsParams,
-) -> Result<KalshiQuestionsResponse, KalshiError> {
+) -> Result<KalshiEventListResponse, KalshiError> {
     info!("kalshi::list_questions called (page {})", params.page_number.unwrap_or(1));
     let resp = client.get("https://trading-api.kalshi.com/v1/events/")
         .query(&params)
@@ -21,7 +21,7 @@ fn list_questions(
     parse_response(resp)
 }
 
-pub fn get_question(client: &Client, id: &str, _config: &Settings) -> Result<KalshiQuestion, KalshiError> {
+pub fn get_question(client: &Client, id: &str, _config: &Settings) -> Result<KalshiMarket, KalshiError> {
     // The Kalshi api requires the id (ticker) to be uppercase. Their frontend
     // uses lowercase by default, but redirects given uppercase. Use
     // uppercase to be safe. Also filter to the characters used in Kalshi
@@ -29,10 +29,14 @@ pub fn get_question(client: &Client, id: &str, _config: &Settings) -> Result<Kal
     let id = id.to_uppercase().chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '.').collect::<String>();
     let resp = client.get(format!("https://trading-api.kalshi.com/v1/events/{}/", id))
         .send()?;
-    parse_response(resp)
+    let resp: KalshiEventResponse = parse_response(resp)?;
+    let event = resp.event;
+    // Convert event into market using try_into
+    let market: Result<KalshiMarket, anyhow::Error> = (&event).try_into();
+    return market.map_err(|_| KalshiError::OnlySingleMarketsSupported);
 }
 
-pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<KalshiQuestion>> {
+pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<KalshiMarket>> {
     info!("Fetching mirror candidates from Kalshi");
     let requirements = &config.kalshi.auto_filter;
     let mut params = KalshiListQuestionsParams {
@@ -59,127 +63,106 @@ pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<K
         events.extend(resp.events.into_iter());
     }
     info!("{} events listed via Kalshi API", events.len());
-    let questions = events
+    let markets = events
         .into_iter()
-        .map(|event| KalshiQuestion {
-            id: event.ticker.clone(),
-            event,
-        })
-        .filter(|q| check_event_requirements(q, requirements).is_ok())
-        .collect();
-    Ok(questions)
+        .map(|event| (&event).try_into())
+        .filter_map(Result::ok)
+        .filter(|q| check_market_requirements(q, requirements).is_ok())
+        .collect::<Vec<KalshiMarket>>();
+
+    Ok(markets)
 }
 
-pub fn check_event_requirements(
-    question: &KalshiQuestion,
+pub fn check_market_requirements(
+    market: &KalshiMarket,
     requirements: &KalshiQuestionRequirements,
 ) -> Result<(), KalshiCheckFailure> {
-    if ! question.has_matching_market() {
-        return Err(KalshiCheckFailure::NoMatchingMarket);
-    }
     // config requirements
-    if requirements.exclude_series && question.is_series() {
-        return Err(KalshiCheckFailure::Series);
-    }
-    if requirements.require_open && !question.is_active() {
+    if requirements.require_open && !market.is_active() {
         return Err(KalshiCheckFailure::NotActive);
     }
-    if requirements.exclude_resolved && question.is_resolved() {
+    if requirements.exclude_resolved && market.is_resolved() {
         return Err(KalshiCheckFailure::Resolved);
     }
     // Min liquidity
-    if question.get_market().liquidity < requirements.min_liquidity {
+    if market.liquidity < requirements.min_liquidity {
         return Err(KalshiCheckFailure::NotEnoughLiquidity {
-            liquidity: question.get_market().liquidity,
+            liquidity: market.liquidity,
             threshold: requirements.min_liquidity,
         });
     }
     // Min volume
-    if question.get_market().volume < requirements.min_volume {
+    if market.volume < requirements.min_volume {
         return Err(KalshiCheckFailure::NotEnoughVolume {
-            volume: question.get_market().volume,
+            volume: market.volume,
             threshold: requirements.min_volume,
         });
     }
     // Min recent volume
-    if question.get_market().recent_volume < requirements.min_recent_volume {
+    if market.recent_volume < requirements.min_recent_volume {
         return Err(KalshiCheckFailure::NotEnoughRecentVolume {
-            recent_volume: question.get_market().recent_volume,
+            recent_volume: market.recent_volume,
             threshold: requirements.min_recent_volume,
         });
     }
     // Min open interest
-    if question.get_market().open_interest < requirements.min_open_interest {
+    if market.open_interest < requirements.min_open_interest {
         return Err(KalshiCheckFailure::NotEnoughOpenInterest {
-            open_interest: question.get_market().open_interest,
+            open_interest: market.open_interest,
             threshold: requirements.min_open_interest,
         });
     }
     // min dollar volume
-    if question.get_market().dollar_volume < requirements.min_dollar_volume {
+    if market.dollar_volume < requirements.min_dollar_volume {
         return Err(KalshiCheckFailure::NotEnoughDollarVolume {
-            dollar_volume: question.get_market().dollar_volume,
+            dollar_volume: market.dollar_volume,
             threshold: requirements.min_dollar_volume,
         });
     }
     // min dollar recent volume
-    if question.get_market().dollar_recent_volume < requirements.min_dollar_recent_volume {
+    if market.dollar_recent_volume < requirements.min_dollar_recent_volume {
         return Err(KalshiCheckFailure::NotEnoughDollarRecentVolume {
-            dollar_recent_volume: question.get_market().dollar_recent_volume,
+            dollar_recent_volume: market.dollar_recent_volume,
             threshold: requirements.min_dollar_recent_volume,
         });
     }
     // min dollar open interest
-    if question.get_market().dollar_open_interest < requirements.min_dollar_open_interest {
+    if market.dollar_open_interest < requirements.min_dollar_open_interest {
         return Err(KalshiCheckFailure::NotEnoughDollarOpenInterest {
-            dollar_open_interest: question.get_market().dollar_open_interest,
+            dollar_open_interest: market.dollar_open_interest,
             threshold: requirements.min_dollar_open_interest,
         });
     }
 
-    if question.time_to_resolution() < Duration::days(requirements.min_days_to_resolution) {
+    if market.time_to_resolution() < Duration::days(requirements.min_days_to_resolution) {
         return Err(KalshiCheckFailure::ResolvesTooSoon {
-            days_remaining: question.time_to_resolution().num_days(),
+            days_remaining: market.time_to_resolution().num_days(),
             threshold: requirements.min_days_to_resolution,
         });
     }
-    if question.time_to_resolution() > Duration::days(requirements.max_days_to_resolution) {
+    if market.time_to_resolution() > Duration::days(requirements.max_days_to_resolution) {
         return Err(KalshiCheckFailure::ResolvesTooLate {
-            days_remaining: question.time_to_resolution().num_days(),
+            days_remaining: market.time_to_resolution().num_days(),
             threshold: requirements.max_days_to_resolution,
         });
     }
-    if question.age() > Duration::days(requirements.max_age_days) {
+    if market.age() > Duration::days(requirements.max_age_days) {
         return Err(KalshiCheckFailure::TooOld {
-            age_days: question.age().num_days(),
+            age_days: market.age().num_days(),
             threshold: requirements.max_age_days,
         });
     }
-    if (100 - question.get_market().yes_ask) as f64 > requirements.max_confidence * 100.0
-    || question.get_market().yes_bid as f64 > requirements.max_confidence * 100.0 {
+    if (100 - market.yes_ask) as f64 > requirements.max_confidence * 100.0
+    || market.yes_bid as f64 > requirements.max_confidence * 100.0 {
         return Err(KalshiCheckFailure::TooExtreme {
-            yes_ask: question.get_market().yes_ask,
-            yes_bid: question.get_market().yes_bid,
+            yes_ask: market.yes_ask,
+            yes_bid: market.yes_bid,
             threshold: requirements.max_confidence,
         });
     }
-    if requirements.exclude_ids.contains(&question.id) {
+    if requirements.exclude_ids.contains(&market.id()) {
         return Err(KalshiCheckFailure::Banned);
     }
-
-    println!("Passed all Kalshi checks URL: {}, liq {}, bid/ask {}/{}, volume {} (${}), recent volume {} (${}), open interest {} (${})",
-        question.full_url(),
-        question.get_market().liquidity,
-        question.get_market().yes_bid,
-        question.get_market().yes_ask,
-        question.get_market().volume,
-        question.get_market().dollar_volume,
-        question.get_market().recent_volume,
-        question.get_market().dollar_recent_volume,
-        question.get_market().open_interest,
-        question.get_market().dollar_open_interest
-    );
-    return Err(KalshiCheckFailure::Banned);
 
     Ok(())
 }
@@ -187,9 +170,14 @@ pub fn check_event_requirements(
 /// helper function for parsing both success and error responses
 fn parse_response<T: DeserializeOwned>(resp: Response) -> Result<T, KalshiError> {
     if resp.status().is_success() {
-        match resp.json() {
+        let body = resp.text().map_err(|_| KalshiError::UnexpectedResponseType)?;
+        match serde_json::from_str(&body) {
             Ok(r) => Ok(r),
-            Err(_) => Err(KalshiError::UnexpectedResponseType), // TODO: wrap inner?
+            Err(e) => {
+                print!("Response: {}", body);
+                println!("Error parsing response from Kalshi: {}", e);
+                Err(KalshiError::UnexpectedResponseType)
+            }
         }
     } else {
         let status = resp.status();
@@ -200,51 +188,34 @@ fn parse_response<T: DeserializeOwned>(resp: Response) -> Result<T, KalshiError>
     }
 }
 
-impl KalshiQuestion {
+impl KalshiMarket {
+    pub fn id(&self) -> String {
+        self.ticker_name.clone()
+    }
+
     pub fn age(&self) -> Duration {
-        Utc::now() - self.get_market().open_date
-    }
-
-    pub fn has_matching_market(&self) -> bool {
-        self.event
-            .markets
-            .iter()
-            .find(|market| market.ticker_name == self.id)
-            .is_some()
-    }
-
-    pub fn get_market(&self) -> &Market {
-        self.event
-            .markets
-            .iter()
-            .find(|market| market.ticker_name == self.id)
-            .with_context(|| format!("Could not find market in series {} with ticker_name {}", self.id, self.id))
-            .unwrap()
+        Utc::now() - self.open_date
     }
 
     pub fn is_resolved(&self) -> bool {
-        self.get_market().status == Status::Finalized
+        self.status == Status::Finalized
     }
 
     pub fn is_active(&self) -> bool {
-        self.get_market().status == Status::Active
-    }
-
-    pub fn is_series(&self) -> bool {
-        self.event.markets.len() > 1
+        self.status == Status::Active
     }
 
     pub fn time_to_resolution(&self) -> Duration {
-        self.get_market().expiration_date - Utc::now()
+        self.expiration_date - Utc::now()
     }
 
     pub fn full_url(&self) -> String {
         // TODO: grab base from config (consistent with manifold)?
-        format!("https://kalshi.com/markets/{}#{}", self.event.series_ticker, self.id)
+        format!("https://kalshi.com/markets/{}#{}", self.series_ticker, self.id())
     }
 
     pub fn title(&self) -> String {
-        self.get_market().title.clone()
+        self.title.clone()
     }
 
     pub fn get_criteria_and_sources(&self) -> String {
@@ -252,9 +223,9 @@ impl KalshiQuestion {
     }
 
     pub fn format_underlying_rulebook_variables(&self) -> String {
-        let mut return_string = self.event.underlying.clone();
+        let mut return_string = self.underlying.clone();
         // For each variable in market.rulebook_variables, substitute ||variable|| with the value of the variable
-        let rulebook = self.get_market().rulebook_variables.clone();
+        let rulebook = self.rulebook_variables.clone();
         // For each key in rulebook
         for key in rulebook.as_object().unwrap().keys() {
             // Remove the surrounding "" marks
@@ -271,7 +242,6 @@ impl KalshiQuestion {
 
     pub fn get_resolution_sources_markdown(&self) -> String {
         let sources = self
-            .event
             .settlement_sources
             .iter()
             .map(|source| format!("<{}>", source.url.clone()))
@@ -286,11 +256,11 @@ impl KalshiQuestion {
 
     pub fn get_binary_resolution(&self) -> Result<Option<BinaryResolution>> {
         if self.is_resolved() {
-            match self.get_market().result {
+            match self.result {
                 Some(KalshiResult::Yes) => Ok(Some(BinaryResolution::Yes)),
                 Some(KalshiResult::No) => Ok(Some(BinaryResolution::No)),
                 Some(KalshiResult::StillOpen) => Ok(None),
-                None => Ok(None),
+                None => Err(anyhow!("Kalshi market is resolved but has no result")),
             }
         } else {
             Ok(None)
@@ -298,39 +268,51 @@ impl KalshiQuestion {
     }
 }
 
-impl TryInto<Question> for &KalshiQuestion {
+impl TryInto<KalshiMarket> for &Event {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<KalshiMarket> {
+        if self.markets.len() != 1 {
+            return Err(anyhow!("Expected exactly one market in event, found {}", self.markets.len()));
+        }
+        let mut market = self.markets[0].clone();
+        market.series_ticker = self.series_ticker.clone();
+        market.underlying = self.underlying.clone();
+        market.settlement_sources = self.settlement_sources.clone();
+        return Ok(market);
+    }
+}
+
+impl TryInto<Question> for &KalshiMarket {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<Question> {
         Ok(Question {
             source: QuestionSource::Kalshi,
             source_url: self.full_url(),
-            source_id: self.id.clone(),
-            question: self.get_market().title.clone(),
+            source_id: self.id(),
+            question: self.title.clone(),
             criteria: Some(self.get_criteria_and_sources()),
-            end_date: self.get_market().expiration_date,
+            end_date: self.expiration_date,
         })
     }
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct KalshiQuestionsResponse {
+pub struct KalshiEventResponse {
+    pub event: Event,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct KalshiEventListResponse {
     pub events: Vec<Event>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct KalshiQuestion {
-    pub event: Event,
-    #[serde(skip)]
-    pub id: String,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "snake_case")]
 pub struct Event {
     pub series_ticker: String,
     pub ticker: String,
-    pub markets: Vec<Market>,
+    pub markets: Vec<KalshiMarket>,
     pub settlement_sources: Vec<SettlementSource>,
     pub underlying: String,
 }
@@ -342,7 +324,7 @@ pub struct SettlementSource {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct Market {
+pub struct KalshiMarket {
     pub title: String,
     pub ticker_name: String,
     pub status: Status,
@@ -359,6 +341,12 @@ pub struct Market {
     pub dollar_open_interest: i64,
     pub liquidity: i64,
     pub rulebook_variables: serde_json::Value,
+    #[serde(skip)]
+    pub series_ticker: String,
+    #[serde(skip)]
+    pub underlying: String,
+    #[serde(skip)]
+    pub settlement_sources: Vec<SettlementSource>,
 }
 
 
@@ -390,12 +378,8 @@ pub struct KalshiListQuestionsParams {
 
 #[derive(Error, Debug)]
 pub enum KalshiCheckFailure {
-    #[error("question does not have matching market id")]
-    NoMatchingMarket,
     #[error("question is not active")]
     NotActive,
-    #[error("question is part of a group")]
-    Series,
     #[error("question has {volume} volume, and the minimum is {threshold}")]
     NotEnoughVolume { volume: i64, threshold: i64 },
     #[error("question has {recent_volume} recent_volume, and the minimum is {threshold}")]
@@ -433,6 +417,8 @@ pub enum KalshiError {
     // TODO: split out concrete errors
     #[error("error response ({}) from Kalshi: {}", .0, .1.error.message)]
     ErrorResponse(StatusCode, KalshiErrorResponse),
+    #[error("Only events with exactly one market are currently supported.")]
+    OnlySingleMarketsSupported,
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
     // #[error(transparent)]
