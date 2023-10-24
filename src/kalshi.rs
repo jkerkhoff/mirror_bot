@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Result, bail};
 use chrono::{DateTime, Duration, Utc};
 use log::info;
 use reqwest::blocking::{Client, Response};
@@ -30,10 +30,7 @@ pub fn get_question(client: &Client, input_ticker: &str, _config: &Settings) -> 
     let resp = client.get(format!("https://trading-api.kalshi.com/v1/events/{}/", validated_ticker))
         .send()?;
     let resp: KalshiEventResponse = parse_response(resp)?;
-    let event = resp.event;
-    // Convert event into market using try_into
-    let market: Result<KalshiMarket, anyhow::Error> = (&event).try_into();
-    return market.map_err(|_| KalshiError::OnlySingleMarketsSupported);
+    return (&resp.event).try_into();
 }
 
 pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<KalshiMarket>> {
@@ -189,8 +186,8 @@ fn parse_response<T: DeserializeOwned>(resp: Response) -> Result<T, KalshiError>
 }
 
 impl KalshiMarket {
-    pub fn id(&self) -> String {
-        self.ticker_name.clone()
+    pub fn id(&self) -> &str {
+        &self.ticker_name
     }
 
     pub fn age(&self) -> Duration {
@@ -259,8 +256,8 @@ impl KalshiMarket {
             match self.result {
                 Some(KalshiResult::Yes) => Ok(Some(BinaryResolution::Yes)),
                 Some(KalshiResult::No) => Ok(Some(BinaryResolution::No)),
-                Some(KalshiResult::StillOpen) => Ok(None),
-                None => Err(anyhow!("Kalshi market is resolved but has no result")),
+                Some(KalshiResult::StillOpen) => bail!("Kalshi market is resolved but has no result"),
+                None => bail!("Kalshi market is resolved but with an unexpected result"),
             }
         } else {
             Ok(None)
@@ -269,11 +266,13 @@ impl KalshiMarket {
 }
 
 impl TryInto<KalshiMarket> for &Event {
-    type Error = anyhow::Error;
+    type Error = KalshiError;
 
-    fn try_into(self) -> Result<KalshiMarket> {
+    fn try_into(self) -> Result<KalshiMarket, KalshiError> {
+        // We're only supporting single market Kalshi events at this time, and
+        // assuming the try_into can only fail in this way
         if self.markets.len() != 1 {
-            return Err(anyhow!("Expected exactly one market in event, found {}", self.markets.len()));
+            return Err(KalshiError::OnlySingleMarketsSupported(self.markets.len()));
         }
         let mut market = self.markets[0].clone();
         market.series_ticker = self.series_ticker.clone();
@@ -417,8 +416,8 @@ pub enum KalshiError {
     // TODO: split out concrete errors
     #[error("error response ({}) from Kalshi: {}", .0, .1.message)]
     ErrorResponse(StatusCode, KalshiErrorResponse),
-    #[error("Only events with exactly one market are currently supported.")]
-    OnlySingleMarketsSupported,
+    #[error("Only events with exactly one market are currently supported ({} found)", .0)]
+    OnlySingleMarketsSupported(usize),
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
     // #[error(transparent)]
