@@ -22,12 +22,15 @@ fn list_questions(
 }
 
 pub fn get_question(client: &Client, input_ticker: &str, _config: &Settings) -> Result<KalshiMarket, KalshiError> {
+    // As input validation, ensure only alphanumeric and "-" and "." are used
+    if ! input_ticker.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '.') {
+        return Err(KalshiError::IllegalTickerCharacters(input_ticker.to_string()));
+    }
     // The Kalshi api requires the ticker to be uppercase, like it's given in
-    // the JSON. Their frontend uses lowercase by default, so user input is
-    // likely to need the uppercase conversion. Also filter to only the
-    // characters used in Kalshi tickers: alphanumeric and "-" and "."
-    let validated_ticker = input_ticker.to_uppercase().chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '.').collect::<String>();
-    let resp = client.get(format!("https://trading-api.kalshi.com/v1/events/{}/", validated_ticker))
+    // the JSON. Their URLs use lowercase by default, so user input is likely
+    // to need the uppercase conversion.
+    let uppercase_ticker = input_ticker.to_uppercase();
+    let resp = client.get(format!("https://trading-api.kalshi.com/v1/events/{}/", uppercase_ticker))
         .send()?;
     let resp: KalshiEventResponse = parse_response(resp)?;
     return (&resp.event).try_into();
@@ -46,8 +49,7 @@ pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<K
         params.status = Some("open".to_string()); // TODO: use enum?
     }
     let mut events = Vec::new();
-    for page_number in 1..100 {
-        params.page_number = Some(page_number);
+    loop {
         let resp = list_questions(client, &params)?;
         // single_event_per_series, and perhaps other filtering parameters, are
         // applied after the server limits to page_size, such that fewer events
@@ -58,6 +60,7 @@ pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<K
             break;
         }
         events.extend(resp.events.into_iter());
+        *params.page_number.as_mut().unwrap() += 1;
     }
     info!("{} events listed via Kalshi API", events.len());
     let markets = events
@@ -420,6 +423,8 @@ pub enum KalshiError {
     OnlySingleMarketsSupported(usize),
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
+    #[error("Only alphanumeric, \"-\", and \".\" are allowed in ticker names (\"{}\" given)", .0)]
+    IllegalTickerCharacters(String),
     // #[error(transparent)]
     // Other(#[from] anyhow::Error),
 }
