@@ -34,7 +34,7 @@ impl Question {
     pub fn embed_html(&self) -> Option<String> {
         match self.source {
             QuestionSource::Metaculus => {
-                Some(format!( 
+                Some(format!(
                     "<iframe src=\"https://www.metaculus.com/questions/question_embed/{}/?theme=dark\" \
                     style=\"height:430px; width:100%; max-width:550px\"></iframe>",
                     self.source_id

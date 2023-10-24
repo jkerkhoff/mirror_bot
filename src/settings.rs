@@ -13,6 +13,49 @@ pub struct Database {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct Kalshi {
+    pub auto_filter: KalshiQuestionRequirements,
+    pub add_group_ids: Vec<String>,
+    pub max_clones_per_day: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct KalshiQuestionRequirements {
+    pub require_open: bool,
+    /// There are some events that use the same series ticker to group
+    /// events. (Not to be confused with each event containing multiple
+    /// markets for e.g. different price points of an asset.) For the most
+    /// part, only one event of a series is open at once, and in those cases
+    /// this parameter changes nothing.
+    ///
+    /// One example where there are multiple open markets is RATECUT,
+    /// seen here: https://kalshi.com/markets/RATECUT. In these cases,
+    /// single_event_per_series appears to return the event/markets that
+    /// appear by default on the frontend. (RATECUT-23DEC31)
+    ///
+    /// I think false is a sensible default. At time of writing in the RATECUT
+    /// case, the 2023 version is probably NO, but it has 2024 versions that
+    /// are still up in the air and getting attention from traders.
+    pub single_event_per_series: bool,
+    pub exclude_resolved: bool,
+    pub exclude_series: bool,
+    pub min_days_to_resolution: i64,
+    pub max_days_to_resolution: i64,
+    pub min_volume: i64,
+    pub min_recent_volume: i64,
+    pub min_open_interest: i64,
+    pub min_dollar_volume: i64,
+    pub min_dollar_recent_volume: i64,
+    pub min_dollar_open_interest: i64,
+    pub min_liquidity: i64,
+    pub max_age_days: i64,
+    /// exclude question if yes_ask is too low or yes_bid is too high, such that
+    /// the probability of YES is too extreme to be interesting
+    pub max_confidence: f64,
+    pub exclude_ids: HashSet<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct MarketTemplate {
     pub description_footer: String,
     pub title_retain_end_characters: usize,
@@ -69,6 +112,7 @@ pub struct Metaculus {
 #[derive(Debug, Deserialize)]
 pub struct Settings {
     pub database: Database,
+    pub kalshi: Kalshi,
     pub manifold: Manifold,
     pub metaculus: Metaculus,
 }

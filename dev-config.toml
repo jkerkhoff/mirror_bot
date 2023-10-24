@@ -1,6 +1,15 @@
 [database]
 path = "./dev-db.db3"
 
+[kalshi]
+max_clones_per_day = 1
+add_group_ids = [
+    "c7fb5859-6c37-4b10-be04-db8f218d80af", # Kalshi on dev
+]
+
+[kalshi.auto_filter]
+exclude_ids = []
+
 [manifold]
 url = "https://dev.manifold.markets/"
 user_id = "Lx20DndIKqYBDrAdJz5geUeZnRz1"  # mirrorbot on dev

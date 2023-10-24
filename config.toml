@@ -1,6 +1,30 @@
 [database]
 path = "./prod-db.db3"
 
+[kalshi]
+max_clones_per_day = 1
+add_group_ids = [
+    "krovXmDn6rCdoiJjbe7R", # Kalshi
+]
+
+[kalshi.auto_filter]
+require_open = true
+single_event_per_series = false
+exclude_resolved = true
+exclude_series = true
+min_liquidity = 20000
+min_volume = 500
+min_recent_volume = 30
+min_open_interest = 30
+min_dollar_volume = 0
+min_dollar_recent_volume = 0
+min_dollar_open_interest = 0
+min_days_to_resolution = 2
+max_days_to_resolution = 365
+max_age_days = 365
+max_confidence = 0.92
+exclude_ids = []
+
 [manifold]
 url = "https://manifold.markets/"
 api_key = "SECRET"  # overridden by MB_MANIFOLD.API_KEY env variable
@@ -56,4 +80,3 @@ max_last_active_days = 90
 max_age_days = 36525
 max_confidence = 0.97
 exclude_ids = []
-

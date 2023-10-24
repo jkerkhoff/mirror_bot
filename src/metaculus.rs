@@ -384,7 +384,7 @@ impl MetaculusQuestion {
             if self.possibilities.r#type == ForecastType::Binary {
                 match self.resolution {
                     Some(-2.0) => {
-                        // Anulled
+                        // Annulled
                         Ok(Some(BinaryResolution::Cancel))
                     }
                     Some(-1.0) => {

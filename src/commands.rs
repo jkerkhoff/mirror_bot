@@ -6,7 +6,7 @@ use crate::args::{self, Commands, ListCommands};
 use crate::manifold::{self, SendManagramArgs};
 use crate::settings::Settings;
 use crate::types::QuestionSource;
-use crate::{db, log_if_err, managrams, metaculus, mirror};
+use crate::{db, kalshi, log_if_err, managrams, metaculus, mirror};
 
 pub(crate) fn run_command(
     config: Settings,
@@ -20,6 +20,7 @@ pub(crate) fn run_command(
             allow_resolved,
         } => mirror_question(&config, source, id, allow_resolved),
         Commands::Sync {
+            kalshi,
             metaculus,
             managrams,
             manifold_self,
@@ -27,6 +28,7 @@ pub(crate) fn run_command(
             all,
         } => sync(
             &config,
+            kalshi,
             metaculus,
             managrams,
             manifold_self,
@@ -100,7 +102,20 @@ pub fn mirror_question(
             println!("Mirrored question:\n{:#?}", row);
         }
         QuestionSource::Kalshi => {
-            bail!("Kalshi mirroring hasn't been implemented yet");
+            let kalshi_question = kalshi::get_question(&client, &id, config)
+                .with_context(|| "failed to fetch question from Kalshi")?;
+            if kalshi_question.is_resolved() {
+                if allow_resolved {
+                    warn!("question has already resolved");
+                } else {
+                    return Err(anyhow!("question has already resolved"));
+                }
+            }
+            let question = (&kalshi_question)
+                .try_into()
+                .with_context(|| "failed to convert Kalshi question to common format")?;
+            let row = mirror::mirror_question(&client, &db, &question, config)?;
+            println!("Mirrored question:\n{:#?}", row);
         }
         QuestionSource::Polymarket => {
             bail!("Polymarket mirroring hasn't been implemented yet");
@@ -111,13 +126,14 @@ pub fn mirror_question(
 
 pub fn sync(
     config: &Settings,
+    kalshi: bool,
     metaculus: bool,
     managrams: bool,
     manifold_self: bool,
     manifold_other: bool,
     all: bool,
 ) -> Result<()> {
-    if !(metaculus || managrams || manifold_self || manifold_other || all) {
+    if !(kalshi || metaculus || managrams || manifold_self || manifold_other || all) {
         bail!("Provide at least one sync target.");
     }
 
@@ -130,6 +146,15 @@ pub fn sync(
 
     if manifold_other || all {
         log_if_err!(mirror::sync_third_party_mirrors(&client, &db, config));
+    }
+
+    if kalshi || all {
+        log_if_err!(mirror::sync_resolutions_to_manifold(
+            &client,
+            &db,
+            config,
+            Some(QuestionSource::Kalshi)
+        ));
     }
 
     if metaculus || all {
@@ -153,9 +178,7 @@ pub fn auto_mirror(config: &Settings, source: QuestionSource, dry_run: bool) -> 
     let db = db::open(&config)?;
     match source {
         QuestionSource::Metaculus => mirror::auto_mirror_metaculus(&client, &db, config, dry_run)?,
-        QuestionSource::Kalshi => {
-            todo!()
-        }
+        QuestionSource::Kalshi => mirror::auto_mirror_kalshi(&client, &db, config, dry_run)?,
         QuestionSource::Polymarket => {
             todo!()
         }
