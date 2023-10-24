@@ -8,11 +8,9 @@ user_id = "PQ8Ot2GZ8NfQdXiJVmJqf3yea8O2"  # mirrorbot
 
 [manifold.template]
 description_footer = """\
-    This market is managed by a bot. Once the original question resolves \
-    this market should automatically resolve the next time the bot is run. \
-    If the original resolved more than a day ago and this question is still \
-    open, ping @jskf. I might resolve this N/A if I find out it's a duplicate \
-    of an existing question within three days of market creation.\
+    Once the original resolves, its resolution will be applied to this market \
+    automatically. Trustworthy-ish users are encouraged to resolve this market \
+    before then if the outcome is known and unambiguous.\
     """
 title_retain_end_characters = 25 # keep the last 25 characters when truncating title
 max_question_length = 120
