@@ -1,10 +1,10 @@
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use chrono::{DateTime, Duration, Utc};
 use log::info;
 use reqwest::blocking::{Client, Response};
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::settings::{KalshiQuestionRequirements, Settings};
@@ -14,23 +14,40 @@ fn list_questions(
     client: &Client,
     params: &KalshiListQuestionsParams,
 ) -> Result<KalshiEventListResponse, KalshiError> {
-    info!("kalshi::list_questions called (page {})", params.page_number.unwrap_or(1));
-    let resp = client.get("https://trading-api.kalshi.com/v1/events/")
+    info!(
+        "kalshi::list_questions called (page {})",
+        params.page_number.unwrap_or(1)
+    );
+    let resp = client
+        .get("https://trading-api.kalshi.com/v1/events/")
         .query(&params)
         .send()?;
     parse_response(resp)
 }
 
-pub fn get_question(client: &Client, input_ticker: &str, _config: &Settings) -> Result<KalshiMarket, KalshiError> {
+pub fn get_question(
+    client: &Client,
+    input_ticker: &str,
+    _config: &Settings,
+) -> Result<KalshiMarket, KalshiError> {
     // As input validation, ensure only alphanumeric and "-" and "." are used
-    if ! input_ticker.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '.') {
-        return Err(KalshiError::IllegalTickerCharacters(input_ticker.to_string()));
+    if !input_ticker
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '.')
+    {
+        return Err(KalshiError::IllegalTickerCharacters(
+            input_ticker.to_string(),
+        ));
     }
     // The Kalshi api requires the ticker to be uppercase, like it's given in
     // the JSON. Their URLs use lowercase by default, so user input is likely
     // to need the uppercase conversion.
     let uppercase_ticker = input_ticker.to_uppercase();
-    let resp = client.get(format!("https://trading-api.kalshi.com/v1/events/{}/", uppercase_ticker))
+    let resp = client
+        .get(format!(
+            "https://trading-api.kalshi.com/v1/events/{}/",
+            uppercase_ticker
+        ))
         .send()?;
     let resp: KalshiEventResponse = parse_response(resp)?;
     return (&resp.event).try_into();
@@ -153,7 +170,8 @@ pub fn check_market_requirements(
         });
     }
     if (100 - market.yes_ask) as f64 > requirements.max_confidence * 100.0
-    || market.yes_bid as f64 > requirements.max_confidence * 100.0 {
+        || market.yes_bid as f64 > requirements.max_confidence * 100.0
+    {
         return Err(KalshiCheckFailure::TooExtreme {
             yes_ask: market.yes_ask,
             yes_bid: market.yes_bid,
@@ -170,7 +188,9 @@ pub fn check_market_requirements(
 /// helper function for parsing both success and error responses
 fn parse_response<T: DeserializeOwned>(resp: Response) -> Result<T, KalshiError> {
     if resp.status().is_success() {
-        let body = resp.text().map_err(|_| KalshiError::UnexpectedResponseType)?;
+        let body = resp
+            .text()
+            .map_err(|_| KalshiError::UnexpectedResponseType)?;
         match serde_json::from_str(&body) {
             Ok(r) => Ok(r),
             Err(e) => {
@@ -211,7 +231,11 @@ impl KalshiMarket {
 
     pub fn full_url(&self) -> String {
         // TODO: grab base from config (consistent with manifold)?
-        format!("https://kalshi.com/markets/{}#{}", self.series_ticker, self.id())
+        format!(
+            "https://kalshi.com/markets/{}#{}",
+            self.series_ticker,
+            self.id()
+        )
     }
 
     pub fn title(&self) -> String {
@@ -219,7 +243,11 @@ impl KalshiMarket {
     }
 
     pub fn get_criteria_and_sources(&self) -> String {
-        format!("{}{}", self.format_underlying_rulebook_variables(), self.get_resolution_sources_markdown())
+        format!(
+            "{}{}",
+            self.format_underlying_rulebook_variables(),
+            self.get_resolution_sources_markdown()
+        )
     }
 
     pub fn format_underlying_rulebook_variables(&self) -> String {
@@ -230,14 +258,13 @@ impl KalshiMarket {
         for key in rulebook.as_object().unwrap().keys() {
             // Remove the surrounding "" marks
             let mut replacement_value = rulebook[key].to_string();
-            replacement_value = replacement_value[1..replacement_value.len()-1].to_string();
+            replacement_value = replacement_value[1..replacement_value.len() - 1].to_string();
 
             // We've seen instances with and without spaces
             return_string = return_string.replace(&format!("||{}||", key), &replacement_value);
             return_string = return_string.replace(&format!("|| {} ||", key), &replacement_value);
         }
-        return return_string
-
+        return return_string;
     }
 
     pub fn get_resolution_sources_markdown(&self) -> String {
@@ -259,7 +286,9 @@ impl KalshiMarket {
             match self.result {
                 Some(KalshiResult::Yes) => Ok(Some(BinaryResolution::Yes)),
                 Some(KalshiResult::No) => Ok(Some(BinaryResolution::No)),
-                Some(KalshiResult::StillOpen) => bail!("Kalshi market is resolved but has no result"),
+                Some(KalshiResult::StillOpen) => {
+                    bail!("Kalshi market is resolved but has no result")
+                }
                 None => bail!("Kalshi market is resolved but with an unexpected result"),
             }
         } else {
@@ -351,7 +380,6 @@ pub struct KalshiMarket {
     pub settlement_sources: Vec<SettlementSource>,
 }
 
-
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
@@ -392,10 +420,20 @@ pub enum KalshiCheckFailure {
     NotEnoughLiquidity { liquidity: i64, threshold: i64 },
     #[error("question has {dollar_volume} dollar_volume, and the minimum is {threshold}")]
     NotEnoughDollarVolume { dollar_volume: i64, threshold: i64 },
-    #[error("question has {dollar_recent_volume} dollar_recent_volume, and the minimum is {threshold}")]
-    NotEnoughDollarRecentVolume { dollar_recent_volume: i64, threshold: i64 },
-    #[error("question has {dollar_open_interest} dollar_open_interest, and the minimum is {threshold}")]
-    NotEnoughDollarOpenInterest { dollar_open_interest: i64, threshold: i64 },
+    #[error(
+        "question has {dollar_recent_volume} dollar_recent_volume, and the minimum is {threshold}"
+    )]
+    NotEnoughDollarRecentVolume {
+        dollar_recent_volume: i64,
+        threshold: i64,
+    },
+    #[error(
+        "question has {dollar_open_interest} dollar_open_interest, and the minimum is {threshold}"
+    )]
+    NotEnoughDollarOpenInterest {
+        dollar_open_interest: i64,
+        threshold: i64,
+    },
     #[error("question resolves in {days_remaining} days, and the minimum is {threshold}")]
     ResolvesTooSoon { days_remaining: i64, threshold: i64 },
     #[error("question resolves in {days_remaining} days, and the maximum is {threshold}")]
@@ -403,7 +441,11 @@ pub enum KalshiCheckFailure {
     #[error("question opened {age_days} days ago, and the maximum is {threshold}")]
     TooOld { age_days: i64, threshold: i64 },
     #[error("The orderbook has bids at {yes_bid}, asks at {yes_ask}, and the maximum confidence is {threshold}")]
-    TooExtreme { yes_bid: i64, yes_ask: i64, threshold: f64 },
+    TooExtreme {
+        yes_bid: i64,
+        yes_ask: i64,
+        threshold: f64,
+    },
     #[error("question has already resolved")]
     Resolved,
     #[error("question is banned in config")]

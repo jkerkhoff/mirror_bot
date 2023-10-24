@@ -7,10 +7,10 @@ use thiserror::Error;
 
 use crate::{
     db::{self, MirrorRow},
+    kalshi::{self, KalshiMarket},
     log_if_err,
     manifold::{self, CreateMarketArgs, ManifoldMarket},
     metaculus::{self, MetaculusQuestion},
-    kalshi::{self, KalshiMarket},
     settings::Settings,
     types::{BinaryResolution, Question, QuestionSource},
 };
@@ -61,7 +61,8 @@ pub fn mirror_kalshi_question(
 ) -> Result<MirrorRow, MirrorError> {
     debug!(
         "Attempting to mirror kalshi question with id {} (\"{}\")",
-        kalshi_market.id(), kalshi_market.title()
+        kalshi_market.id(),
+        kalshi_market.title()
     );
     let kalshi_market = kalshi::get_question(client, &kalshi_market.id(), config).unwrap();
     let question: Question = (&kalshi_market)
@@ -120,8 +121,8 @@ pub fn auto_mirror_kalshi(
         .iter()
         .filter(|m| m.clone_date > Utc::now() - Duration::days(1))
         .count();
-    let remaining_budget = config.kalshi.max_clones_per_day
-        - clone_count_today.min(config.kalshi.max_clones_per_day); // TODO: might want to write a query for this?
+    let remaining_budget =
+        config.kalshi.max_clones_per_day - clone_count_today.min(config.kalshi.max_clones_per_day); // TODO: might want to write a query for this?
     info!(
         "Cloned {} kalshi questions in last 24 hours. Remaining budget: {}",
         clone_count_today, remaining_budget
@@ -138,14 +139,13 @@ pub fn auto_mirror_kalshi(
             );
             continue;
         }
-        match mirror_kalshi_question(client, db, config, &kalshi_question).with_context(
-            || {
-                format!(
-                    "failed to mirror question with id {} (\"{}\")",
-                    kalshi_question.id(), kalshi_question.title()
-                )
-            },
-        ) {
+        match mirror_kalshi_question(client, db, config, &kalshi_question).with_context(|| {
+            format!(
+                "failed to mirror question with id {} (\"{}\")",
+                kalshi_question.id(),
+                kalshi_question.title()
+            )
+        }) {
             Ok(market) => {
                 info!("Created a mirror:\n{:#?}", market);
             }
@@ -292,9 +292,7 @@ fn sync_mirror(
         crate::types::QuestionSource::Metaculus => {
             sync_metaculus_mirror(client, db, &mirror, config)?
         }
-        crate::types::QuestionSource::Kalshi => {
-            sync_kalshi_mirror(client, db, &mirror, config)?
-        }
+        crate::types::QuestionSource::Kalshi => sync_kalshi_mirror(client, db, &mirror, config)?,
         crate::types::QuestionSource::Polymarket => todo!(),
     })
 }

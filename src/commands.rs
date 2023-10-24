@@ -6,7 +6,7 @@ use crate::args::{self, Commands, ListCommands};
 use crate::manifold::{self, SendManagramArgs};
 use crate::settings::Settings;
 use crate::types::QuestionSource;
-use crate::{db, log_if_err, kalshi, managrams, metaculus, mirror};
+use crate::{db, kalshi, log_if_err, managrams, metaculus, mirror};
 
 pub(crate) fn run_command(
     config: Settings,

@@ -486,9 +486,7 @@ impl CreateMarketArgs {
             QuestionSource::Metaculus => {
                 group_ids.extend(config.metaculus.add_group_ids.iter().cloned())
             }
-            QuestionSource::Kalshi => {
-                group_ids.extend(config.kalshi.add_group_ids.iter().cloned())
-            }
+            QuestionSource::Kalshi => group_ids.extend(config.kalshi.add_group_ids.iter().cloned()),
             QuestionSource::Polymarket => {
                 todo!()
             }
