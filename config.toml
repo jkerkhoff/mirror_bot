@@ -9,7 +9,6 @@ add_group_ids = [
 
 [kalshi.auto_filter]
 require_open = true
-page_size = 200
 single_event_per_series = false
 exclude_resolved = true
 exclude_series = true

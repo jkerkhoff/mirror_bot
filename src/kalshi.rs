@@ -40,16 +40,16 @@ pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<K
     info!("Fetching mirror candidates from Kalshi");
     let requirements = &config.kalshi.auto_filter;
     let mut params = KalshiListQuestionsParams {
+        single_event_per_series: Some(requirements.single_event_per_series),
+        page_size: Some(200),
+        page_number: Some(1),
         ..Default::default()
     };
     if requirements.require_open {
         params.status = Some("open".to_string()); // TODO: use enum?
     }
-    params.single_event_per_series = Some(requirements.single_event_per_series);
-    params.page_size = Some(requirements.page_size);
     let mut events = Vec::new();
     for page_number in 1..100 {
-        // Set page_number in params
         params.page_number = Some(page_number);
         let resp = list_questions(client, &params)?;
         // single_event_per_series, and perhaps other filtering parameters, are

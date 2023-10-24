@@ -22,7 +22,6 @@ pub struct Kalshi {
 #[derive(Debug, Deserialize)]
 pub struct KalshiQuestionRequirements {
     pub require_open: bool,
-    pub page_size: i64,
     /// There are some events that use the same series ticker to group
     /// events. (Not to be confused with each event containing multiple
     /// markets for e.g. different price points of an asset.) For the most
