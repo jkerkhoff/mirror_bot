@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use chrono::{DateTime, Duration, Utc};
-use log::info;
+use log::{debug, info};
 use reqwest::blocking::{Client, Response};
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
@@ -14,7 +14,7 @@ fn list_questions(
     client: &Client,
     params: &KalshiListQuestionsParams,
 ) -> Result<KalshiEventListResponse, KalshiError> {
-    info!(
+    debug!(
         "kalshi::list_questions called (page {})",
         params.page_number.unwrap_or(1)
     );
