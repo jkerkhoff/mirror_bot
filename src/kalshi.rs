@@ -415,7 +415,7 @@ pub enum KalshiError {
     #[error("failed to parse success response from Kalshi")]
     UnexpectedResponseType,
     // TODO: split out concrete errors
-    #[error("error response ({}) from Kalshi: {}", .0, .1.error.message)]
+    #[error("error response ({}) from Kalshi: {}", .0, .1.message)]
     ErrorResponse(StatusCode, KalshiErrorResponse),
     #[error("Only events with exactly one market are currently supported.")]
     OnlySingleMarketsSupported,
@@ -425,14 +425,24 @@ pub enum KalshiError {
     // Other(#[from] anyhow::Error),
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 pub struct KalshiErrorResponse {
-    error: Error,
+    message: String,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Error {
-    message: String,
+impl<'de> Deserialize<'de> for KalshiErrorResponse {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Main {
+            error: KalshiErrorResponse,
+        }
+        let tmp = Main::deserialize(deserializer)?;
+        Ok(KalshiErrorResponse {
+            message: tmp.error.message,
+        })
+    }
 }
