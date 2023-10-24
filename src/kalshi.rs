@@ -21,13 +21,13 @@ fn list_questions(
     parse_response(resp)
 }
 
-pub fn get_question(client: &Client, id: &str, _config: &Settings) -> Result<KalshiMarket, KalshiError> {
-    // The Kalshi api requires the id (ticker) to be uppercase. Their frontend
-    // uses lowercase by default, but redirects given uppercase. Use
-    // uppercase to be safe. Also filter to the characters used in Kalshi
-    // tickers: alphanumeric and "-" and "."
-    let id = id.to_uppercase().chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '.').collect::<String>();
-    let resp = client.get(format!("https://trading-api.kalshi.com/v1/events/{}/", id))
+pub fn get_question(client: &Client, input_ticker: &str, _config: &Settings) -> Result<KalshiMarket, KalshiError> {
+    // The Kalshi api requires the ticker to be uppercase, like it's given in
+    // the JSON. Their frontend uses lowercase by default, so user input is
+    // likely to need the uppercase conversion. Also filter to only the
+    // characters used in Kalshi tickers: alphanumeric and "-" and "."
+    let validated_ticker = input_ticker.to_uppercase().chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '.').collect::<String>();
+    let resp = client.get(format!("https://trading-api.kalshi.com/v1/events/{}/", validated_ticker))
         .send()?;
     let resp: KalshiEventResponse = parse_response(resp)?;
     let event = resp.event;
@@ -160,7 +160,7 @@ pub fn check_market_requirements(
             threshold: requirements.max_confidence,
         });
     }
-    if requirements.exclude_ids.contains(&market.id()) {
+    if requirements.exclude_ids.contains(market.id()) {
         return Err(KalshiCheckFailure::Banned);
     }
 
@@ -290,7 +290,7 @@ impl TryInto<Question> for &KalshiMarket {
         Ok(Question {
             source: QuestionSource::Kalshi,
             source_url: self.full_url(),
-            source_id: self.id(),
+            source_id: self.id().to_string(),
             question: self.title.clone(),
             criteria: Some(self.get_criteria_and_sources()),
             end_date: self.expiration_date,
