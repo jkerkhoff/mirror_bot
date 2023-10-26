@@ -1,15 +1,14 @@
-use log::{debug, error, info};
-
-use reqwest::{blocking::Client, Url};
-
-use anyhow::{Context, Result};
-
 use crate::{
     db, log_if_err,
     manifold::{self, GetManagramsArgs, Managram, SendManagramArgs},
     metaculus, mirror,
     settings::Settings,
+    types::QuestionSource,
 };
+use anyhow::{Context, Result};
+use clap::{Parser, Subcommand};
+use log::{debug, error, info};
+use reqwest::{blocking::Client, Url};
 
 /// Fetch managrams from manifold and save to db for processing.
 pub fn sync_managrams(client: &Client, db: &rusqlite::Connection, config: &Settings) -> Result<()> {
@@ -171,4 +170,63 @@ fn extract_metaculus_id_from_url(url: &str) -> Option<String> {
         }
     }
     None
+}
+
+#[derive(Debug, Parser)]
+struct ManagramArgs {
+    #[command(subcommand)]
+    pub command: ManagramCommands,
+}
+
+#[derive(Debug, Subcommand)]
+enum ManagramCommands {
+    /// Request a mirror for a specific question
+    Mirror(MirrorArgs),
+}
+
+#[derive(Debug, Parser)]
+struct MirrorArgs {
+    /// Question to mirror (url)
+    #[arg(value_parser = MirrorTarget::parse_arg)]
+    target: MirrorTarget,
+    /// Create mirror even if we think someone else already did
+    #[arg(long = "force")]
+    force: bool,
+}
+
+#[derive(Debug, Clone)]
+struct MirrorTarget {
+    source: QuestionSource,
+    source_id: String,
+}
+
+impl MirrorTarget {
+    fn parse_arg(s: &str) -> Result<Self, String> {
+        let generic_error = "Invalid URL";
+        let url: Url = s.parse().map_err(|_| generic_error.to_string())?;
+        match url.host_str() {
+            Some("www.metaculus.com") => {
+                let metaculus_error = "Failed to parse Metaculus question url";
+                let mut path = url.path_segments().ok_or(metaculus_error.to_string())?;
+                if path.next() != Some("questions") {
+                    return Err(metaculus_error.to_string());
+                }
+                let id = path
+                    .next()
+                    .ok_or("Missing Metaculus question id".to_string())?;
+                let _: u64 = id
+                    .parse()
+                    .map_err(|_| "Metaculus question id must be a positive integer".to_string())?;
+                Ok(Self {
+                    source: QuestionSource::Metaculus,
+                    source_id: id.into(),
+                })
+            }
+            Some("kalshi.com") => {
+                Err("Managram mirroring for Kalshi has not been implemented yet.".to_string())
+            }
+            Some(host) => Err(format!("Unrecognized host `{}`", host)),
+            None => Err(generic_error.to_string()),
+        }
+    }
 }
