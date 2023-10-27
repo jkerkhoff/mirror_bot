@@ -1,5 +1,6 @@
 use crate::{
-    db, log_if_err,
+    db::{self, AnyMirror, MirrorRow},
+    log_if_err,
     manifold::{self, GetManagramsArgs, Managram, SendManagramArgs},
     metaculus, mirror,
     settings::Settings,
@@ -7,7 +8,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use log::{debug, error, info};
+use log::{debug, info, warn};
 use reqwest::{blocking::Client, Url};
 
 /// Fetch managrams from manifold and save to db for processing.
@@ -30,18 +31,24 @@ pub fn sync_managrams(client: &Client, db: &rusqlite::Connection, config: &Setti
     Ok(())
 }
 
+/// Fetch unprocessed managrams from db and process them.
 pub fn process_managrams(
     client: &Client,
     db: &rusqlite::Connection,
     config: &Settings,
 ) -> Result<()> {
     for managram in db::get_unprocessed_managrams(db)? {
-        log_if_err!(process_managram(client, db, config, &managram)
-            .with_context(|| format!("failed to process managram: {:?}", managram)));
+        log_if_err!(
+            process_managram(client, db, config, &managram).with_context(|| format!(
+                "while processing managram (id: {}, user_id: {})",
+                managram.id, managram.from_id
+            ))
+        );
     }
     Ok(())
 }
 
+/// Process an unprocessed managram. Does not check processed state.
 fn process_managram(
     client: &Client,
     db: &rusqlite::Connection,
@@ -49,130 +56,208 @@ fn process_managram(
     managram: &Managram,
 ) -> Result<()> {
     debug!("Processing managram with txn_id {}", managram.id);
-    match managram.message.split_once(' ') {
-        Some(("mirror", target)) => {
-            process_managram_mirror_request(client, db, config, managram, target)?;
-        }
-        _ => {
-            debug!("Managram does not contain known command. Marking processed.",);
+    let result = process_managram_command(client, db, config, managram);
+    match result {
+        Ok(()) => {
             db::set_managram_processed(db, &managram.id, true)?;
+        }
+        Err(ManagramProcessingError::UserFacing(msg)) => {
+            warn!(
+                "Command from managram with id {} failed (message: {}). Refunding.",
+                managram.id, msg
+            );
+            // Mark processed before refunding so we don't keep sending the refund if we get an error response.
+            // TODO: encode failure state in db somehow
+            // maybe instead of "processed", have a state that can be new/complete/started/failed
+            db::set_managram_processed(db, &managram.id, true)?;
+            respond_to_managram(client, config, managram, ResponseAmount::Refund, msg)?;
+        }
+        Err(ManagramProcessingError::Internal(e)) => {
+            // TODO: append error instead of failing silently
+            db::set_managram_processed(db, &managram.id, true).ok();
+            return Err(e);
         }
     }
     Ok(())
 }
 
-fn process_managram_mirror_request(
+enum ManagramProcessingError {
+    /// Errors expected during normal operation. These should lead to an error response for the user.
+    UserFacing(String),
+    /// Errors that indicate something went wrong in a way that leaves us in an unclear state.
+    /// Fail silently from user perspective, fail loudly in logs.
+    Internal(anyhow::Error),
+}
+
+/// Try to parse a command from a managram and execute it.
+fn process_managram_command(
     client: &Client,
     db: &rusqlite::Connection,
     config: &Settings,
     managram: &Managram,
-    target: &str,
-) -> Result<()> {
-    debug!("Processing managram mirror request.");
-    let cfg = &config.manifold.managrams;
-    let mut failure_text = None;
-    let min_amount = cfg.min_amount + cfg.mirror_cost;
-    // TODO: make this not a monstrosity
-    if managram.amount >= min_amount {
-        if let Some(metaculus_question_id) = extract_metaculus_id_from_url(target) {
-            match metaculus::get_question(client, &metaculus_question_id, config) {
-                Ok(metaculus_question) => {
-                    if let Some(mirror) = db::get_any_mirror(
-                        db,
-                        &crate::types::QuestionSource::Metaculus,
-                        &metaculus_question.id.to_string(),
-                    )? {
-                        failure_text = Some(format!(
-                            "a mirror already exists at {}",
-                            mirror.manifold_url()
-                        ));
-                    } else {
-                        match metaculus::check_question_requirements(
-                            &metaculus_question,
-                            &config.metaculus.request_filter,
-                        ) {
-                            Ok(()) => {
-                                match mirror::mirror_metaculus_question(
-                                    client,
-                                    db,
-                                    config,
-                                    &metaculus_question,
-                                ) {
-                                    Ok(market) => {
-                                        db::set_managram_processed(db, &managram.id, true)?;
-                                        manifold::send_managram(
-                                            client,
-                                            config,
-                                            &SendManagramArgs {
-                                                amount: cfg.min_amount,
-                                                to_ids: vec![managram.from_id.clone()],
-                                                message: format!(
-                                                    "Success! {}",
-                                                    market.manifold_url
-                                                ),
-                                            },
-                                        )?;
-                                    }
-                                    Err(e) => {
-                                        error!("error while cloning from request: {:#}", e);
-                                        failure_text = Some("unexpected error".to_owned());
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                failure_text = Some(e.to_string());
-                            }
-                        }
-                    }
-                }
-                Err(_) => {
-                    failure_text = Some("failed to fetch question from metaculus".to_owned());
-                }
-            }
-        } else {
-            failure_text = Some("failed to parse Metaculus question url".to_owned());
+) -> Result<(), ManagramProcessingError> {
+    // clap expects args in the form of a list of strings, since normally the shell
+    // handles tokenization etc. For now this just splits on whitespace. If we want
+    // quoted arguments in the future we'll have to do something fancier than this.
+    let args = ManagramArgs::try_parse_from(managram.message.split_whitespace())
+        .map_err(|e| ManagramProcessingError::UserFacing(e.to_string()))?;
+    match args.command {
+        ManagramCommands::Mirror(args) => {
+            process_managram_mirror_command(client, db, config, managram, args)
         }
-    } else {
-        failure_text = Some(format!(
-            "please include {} mana in mirror request",
-            min_amount
-        ))
+        ManagramCommands::Ping => {
+            info!(
+                "Managram ping received (id: {}, user id: {})",
+                managram.id, managram.from_id
+            );
+            respond_to_managram(client, config, managram, ResponseAmount::Refund, "Pong!")
+                .map_err(|e| ManagramProcessingError::Internal(e))?;
+            db::set_managram_processed(db, &managram.id, true)
+                .map_err(|e| ManagramProcessingError::Internal(e))
+        }
+        ManagramCommands::None(_) => {
+            info!(
+                "Managram with id {} from {} does not contain a known command. Ignoring.",
+                managram.id, managram.from_id
+            );
+            db::set_managram_processed(db, &managram.id, true)
+                .map_err(|e| ManagramProcessingError::Internal(e))
+        }
     }
-    if let Some(failure_text) = failure_text {
-        // mark processed before actually refunding to prevent theft in case of error
-        db::set_managram_processed(db, &managram.id, true)?;
-        manifold::send_managram(
-            client,
-            config,
-            &SendManagramArgs {
-                amount: managram.amount,
-                to_ids: vec![managram.from_id.clone()],
-                message: format!("mirror failed: {}", failure_text),
-            },
-        )?;
+}
+
+fn process_managram_mirror_command(
+    client: &Client,
+    db: &rusqlite::Connection,
+    config: &Settings,
+    managram: &Managram,
+    MirrorArgs {
+        target: MirrorTarget { source, source_id },
+        force,
+    }: MirrorArgs,
+) -> Result<(), ManagramProcessingError> {
+    info!(
+        "Processing managram mirror command. \
+        Managram id: {}. From id: {}. Question source: {}. Question id: {}. Force: {}.",
+        managram.id, managram.from_id, source, source_id, force
+    );
+    let cfg = &config.manifold.managrams;
+    let required_amount = cfg.mirror_cost + cfg.min_amount;
+    if managram.amount < required_amount {
+        return Err(ManagramProcessingError::UserFacing(format!(
+            "Mirror requests should include at least {} mana.",
+            required_amount
+        )));
     }
+    // TODO: we need to ensure we actually find a mirror if it exists.
+    // I could see this going wrong with Kalshi (case insensitive id input).
+    match db::get_any_mirror(db, &source, &source_id)
+        .map_err(|e| ManagramProcessingError::Internal(e))?
+    {
+        Some(AnyMirror::Mirror(mirror)) => {
+            return Err(ManagramProcessingError::UserFacing(format!(
+                "Mirror already exists: {}",
+                mirror.manifold_url,
+            )));
+        }
+        Some(AnyMirror::ThirdPartyMirror(mirror)) => {
+            if force {
+                warn!("Ignoring third party mirror due to force flag.");
+            } else {
+                return Err(ManagramProcessingError::UserFacing(format!(
+                    "Found an existing mirror from a different user at {}. \
+                    Append --force to your request to create a new mirror anyway.",
+                    mirror.manifold_url,
+                )));
+            }
+        }
+        None => {}
+    }
+    let mirror = match source {
+        QuestionSource::Metaculus => {
+            process_managram_mirror_metaculus(client, db, config, managram, &source_id)?
+        }
+        QuestionSource::Kalshi => todo!(),
+        QuestionSource::Polymarket => todo!(),
+    };
+    db::set_managram_processed(db, &managram.id, true)
+        .map_err(|e| ManagramProcessingError::Internal(e))?;
+    respond_to_managram(
+        client,
+        config,
+        managram,
+        ResponseAmount::Minimum,
+        format!("Created mirror at {}", mirror.manifold_url),
+    )
+    .map_err(|e| ManagramProcessingError::Internal(e))?;
     Ok(())
 }
 
-fn extract_metaculus_id_from_url(url: &str) -> Option<String> {
-    if let Ok(url) = url.parse::<Url>() {
-        if let Some(domain) = url.domain() {
-            // TODO: there has to be a better way to do this
-            if domain == "metaculus.com" || domain == "www.metaculus.com" {
-                let segments: Vec<&str> = url.path_segments().unwrap().collect();
-                if segments.len() >= 2
-                    && segments[0] == "questions"
-                    && segments[1].parse::<usize>().is_ok()
-                {
-                    return Some(segments[1].to_string());
-                }
-            }
-        }
+fn process_managram_mirror_metaculus(
+    client: &Client,
+    db: &rusqlite::Connection,
+    config: &Settings,
+    managram: &Managram,
+    source_id: &str,
+) -> Result<MirrorRow, ManagramProcessingError> {
+    debug!("Metaculus mirror request.");
+    let question = metaculus::get_question(client, source_id, config).map_err(|_| {
+        ManagramProcessingError::UserFacing(format!(
+            "Failed to fetch question with id {} from Metaculus.",
+            source_id
+        ))
+    })?;
+    metaculus::check_question_requirements(&question, &config.metaculus.request_filter)
+        .map_err(|e| ManagramProcessingError::UserFacing(e.to_string()))?;
+    info!(
+        "Checks passed. Mirroring metaculus question with id {} (\"{}\") at user request. Managram id: {}. User id: {}",
+        question.id, question.title, managram.id, managram.from_id
+    );
+    match mirror::mirror_metaculus_question(client, db, config, &question) {
+        Ok(mirror) => Ok(mirror),
+        // TODO: maybe split out some cases where we can safely respond
+        Err(e) => Err(ManagramProcessingError::Internal(e.into())),
     }
-    None
+}
+
+fn respond_to_managram<M: Into<String>>(
+    client: &Client,
+    config: &Settings,
+    managram: &Managram,
+    amount: ResponseAmount,
+    message: M,
+) -> Result<()> {
+    let amount = match amount {
+        ResponseAmount::Refund => managram.amount,
+        ResponseAmount::Minimum => config.manifold.managrams.min_amount,
+        ResponseAmount::Amount(amount) => amount,
+    };
+    manifold::send_managram(
+        client,
+        config,
+        &SendManagramArgs {
+            amount,
+            to_ids: vec![managram.from_id.clone()],
+            message: message.into(),
+        },
+    )?;
+    info!(
+        "Responded to managram with id {} from user with id {}. Request amount: {}. Response amount: {}.",
+        managram.id, managram.from_id, managram.amount, amount
+    );
+    Ok(())
+}
+
+#[derive(Debug)]
+enum ResponseAmount {
+    Refund,
+    Minimum,
+    Amount(f64),
 }
 
 #[derive(Debug, Parser)]
+#[command(disable_help_flag(true))]
+#[command(no_binary_name(true))]
 struct ManagramArgs {
     #[command(subcommand)]
     pub command: ManagramCommands,
@@ -182,6 +267,11 @@ struct ManagramArgs {
 enum ManagramCommands {
     /// Request a mirror for a specific question
     Mirror(MirrorArgs),
+    /// Responds "Pong!", for testing purposes
+    Ping,
+    /// Anything else
+    #[command(external_subcommand)]
+    None(Vec<String>),
 }
 
 #[derive(Debug, Parser)]
@@ -211,12 +301,13 @@ impl MirrorTarget {
                 if path.next() != Some("questions") {
                     return Err(metaculus_error.to_string());
                 }
+                // validate and normalize id
                 let id = path
                     .next()
-                    .ok_or("Missing Metaculus question id".to_string())?;
-                let _: u64 = id
-                    .parse()
-                    .map_err(|_| "Metaculus question id must be a positive integer".to_string())?;
+                    .ok_or("Missing Metaculus question id".to_string())?
+                    .parse::<u64>()
+                    .map_err(|_| "Metaculus question id must be a positive integer".to_string())?
+                    .to_string();
                 Ok(Self {
                     source: QuestionSource::Metaculus,
                     source_id: id.into(),
