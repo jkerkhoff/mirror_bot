@@ -2,7 +2,7 @@
 path = "./prod-db.db3"
 
 [kalshi]
-max_clones_per_day = 1
+max_clones_per_day = 3
 add_group_ids = [
     "krovXmDn6rCdoiJjbe7R", # Kalshi
 ]
@@ -34,7 +34,8 @@ user_id = "PQ8Ot2GZ8NfQdXiJVmJqf3yea8O2"  # mirrorbot
 description_footer = """\
     Once the original resolves, its resolution will be applied to this market \
     automatically. Trustworthy-ish users are encouraged to resolve this market \
-    before then if the outcome is known and unambiguous.\
+    before then if the outcome is known and unambiguous. Feel free to ping @jskf 
+    to request early resolution or to report issues.\
     """
 title_retain_end_characters = 25 # keep the last 25 characters when truncating title
 max_question_length = 120
