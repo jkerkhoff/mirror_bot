@@ -204,7 +204,10 @@ fn parse_response<T: DeserializeOwned>(resp: Response) -> Result<T, KalshiError>
         let error_resp: KalshiErrorResponse = resp
             .json()
             .map_err(|_| KalshiError::UnexpectedErrorType(status))?;
-        Err(KalshiError::ErrorResponse(status, error_resp))
+        match error_resp.code {
+            KalshiErrorCode::NotFound => Err(KalshiError::NotFound(status, error_resp)),
+            KalshiErrorCode::Unknown => Err(KalshiError::ErrorResponse(status, error_resp)),
+        }
     }
 }
 
@@ -461,6 +464,8 @@ pub enum KalshiError {
     // TODO: split out concrete errors
     #[error("error response ({}) from Kalshi: {}", .0, .1.message)]
     ErrorResponse(StatusCode, KalshiErrorResponse),
+    #[error("error response ({}) from Kalshi: {}", .0, .1.message)]
+    NotFound(StatusCode, KalshiErrorResponse),
     #[error("Only events with exactly one market are currently supported ({} found)", .0)]
     OnlySingleMarketsSupported(usize),
     #[error(transparent)]
