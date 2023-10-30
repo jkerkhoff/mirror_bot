@@ -454,7 +454,7 @@ pub enum KalshiCheckFailure {
 
 #[derive(Error, Debug)]
 pub enum KalshiError {
-    #[error("failed to parse error response from Kalshi")]
+    #[error("failed to parse error response from Kalshi (status code: {})", .0)]
     UnexpectedErrorType(StatusCode),
     #[error("failed to parse success response from Kalshi")]
     UnexpectedResponseType,
