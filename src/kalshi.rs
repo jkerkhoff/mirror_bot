@@ -473,7 +473,22 @@ pub enum KalshiError {
 
 #[derive(Debug)]
 pub struct KalshiErrorResponse {
+    code: KalshiErrorCode,
     message: String,
+    service: String,
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum KalshiErrorCode {
+    NotFound,
+    Unknown,
+}
+
+impl Default for KalshiErrorCode {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 impl<'de> Deserialize<'de> for KalshiErrorResponse {
@@ -482,13 +497,23 @@ impl<'de> Deserialize<'de> for KalshiErrorResponse {
         D: serde::Deserializer<'de>,
     {
         #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Main {
-            error: KalshiErrorResponse,
+        struct Outer {
+            error: Inner,
         }
-        let tmp = Main::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        struct Inner {
+            // TODO: parse unknown error code
+            // see https://github.com/serde-rs/serde/issues/912
+            #[serde(default)]
+            code: KalshiErrorCode,
+            message: String,
+            service: String,
+        }
+        let tmp = Outer::deserialize(deserializer)?.error;
         Ok(KalshiErrorResponse {
-            message: tmp.error.message,
+            code: tmp.code,
+            message: tmp.message,
+            service: tmp.service,
         })
     }
 }
