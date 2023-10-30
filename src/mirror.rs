@@ -51,7 +51,7 @@ pub fn mirror_question(
     Ok(db::insert_mirror(db, &market, &question, config)?)
 }
 
-/// Attempt to mirror a metaculus question.
+/// Attempt to mirror a Kalshi question.
 /// Does not check configurable question requirements.
 pub fn mirror_kalshi_question(
     client: &Client,
@@ -64,7 +64,13 @@ pub fn mirror_kalshi_question(
         kalshi_market.id(),
         kalshi_market.title()
     );
-    let kalshi_market = kalshi::get_question(client, &kalshi_market.id(), config).unwrap();
+    let kalshi_market =
+        kalshi::get_question(client, &kalshi_market.id(), config).with_context(|| {
+            format!(
+                "failed to fetch Kalshi question with id {}",
+                kalshi_market.id()
+            )
+        })?;
     let question: Question = (&kalshi_market)
         .try_into()
         .with_context(|| "failed to convert Kalshi question to common format")?;
