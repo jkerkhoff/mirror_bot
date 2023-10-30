@@ -432,7 +432,10 @@ impl TryInto<Question> for &MetaculusQuestion {
             source_url: self.full_url(),
             source_id: self.id.to_string(),
             question: self.title.clone(),
-            criteria: self.resolution_criteria.clone(),
+            criteria: self.resolution_criteria.as_ref().map(|criteria| format!(
+                "{}\n\nFine print and additional background information can be found [on Metaculus]({}).", 
+                criteria, self.full_url()
+            )),
             end_date: self.resolve_time,
         })
     }
