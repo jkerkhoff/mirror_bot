@@ -1,4 +1,4 @@
-name: Deploy dev
+name: Deploy prod
 on:
   # workflow_run:
   #   workflows: [Build]
@@ -8,7 +8,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to dev
+    name: Deploy to prod
     runs-on: ubuntu-20.04
     if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
     steps:
@@ -29,13 +29,13 @@ jobs:
         DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
 
-    - name: Deploy (dev)
+    - name: Deploy (prod)
       run: |
-        ssh -i ~/.ssh/private_key "deploy@$DEPLOY_HOST" 'sudo mkdir -p /srv/mirrorbot/dev && sudo chown -R deploy:mirrorbot /srv/mirrorbot && sudo chmod g+rwx -R /srv/mirrorbot/'
-        scp -r -i ~/.ssh/private_key config.toml dev-config.toml deploy "deploy@$DEPLOY_HOST:/srv/mirrorbot/dev/"
+        ssh -i ~/.ssh/private_key "deploy@$DEPLOY_HOST" 'sudo mkdir -p /srv/mirrorbot/prod && sudo chown -R deploy:mirrorbot /srv/mirrorbot && sudo chmod g+rwx -R /srv/mirrorbot/'
+        scp -r -i ~/.ssh/private_key config.toml deploy "deploy@$DEPLOY_HOST:/srv/mirrorbot/prod/"
         ssh -i ~/.ssh/private_key "deploy@$DEPLOY_HOST" '\
-          cd /srv/mirrorbot/dev/deploy && \
-          sudo python3 install.py dev'
+          cd /srv/mirrorbot/prod/deploy && \
+          sudo python3 install.py prod'
       shell: bash
       env:
         DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
