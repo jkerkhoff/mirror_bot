@@ -15,8 +15,8 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    # - name: Build
-    #   run: cargo build --release
+    - name: Build
+      run: cargo build --release
 
     - name: Create SSH key
       run: |
@@ -32,7 +32,7 @@ jobs:
     - name: Deploy (prod)
       run: |
         ssh -i ~/.ssh/private_key "deploy@$DEPLOY_HOST" 'sudo mkdir -p /srv/mirrorbot/prod && sudo chown -R deploy:mirrorbot /srv/mirrorbot && sudo chmod g+rwx -R /srv/mirrorbot/'
-        scp -r -i ~/.ssh/private_key config.toml deploy "deploy@$DEPLOY_HOST:/srv/mirrorbot/prod/"
+        scp -r -i ~/.ssh/private_key target/release/mirror_bot config.toml deploy "deploy@$DEPLOY_HOST:/srv/mirrorbot/prod/"
         ssh -i ~/.ssh/private_key "deploy@$DEPLOY_HOST" '\
           cd /srv/mirrorbot/prod/deploy && \
           sudo python3 install.py prod'
