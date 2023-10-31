@@ -83,11 +83,7 @@ pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<K
     let markets = events
         .into_iter()
         .filter(|e| !e.is_multimarket())
-        .map(|event| {
-            (&event)
-                .try_into()
-                .expect("Failed to convert Kalshi event to market")
-        })
+        .filter_map(|event| (&event).try_into().ok())
         .filter(|q| check_market_requirements(q, requirements).is_ok())
         .collect::<Vec<KalshiMarket>>();
 
