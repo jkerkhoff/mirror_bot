@@ -9,7 +9,7 @@ def get_env() -> str:
     assert sys.argv[1] in ('dev', 'prod')
     return sys.argv[1]
 
-def install_template(in_path: str, out_path: str, subs: list[tuple[str, str]]):
+def install_template(in_path: str, out_path: str, subs: list):
     with open(in_path, 'r') as f:
         text = f.read()
     for key, value in subs:
@@ -17,7 +17,7 @@ def install_template(in_path: str, out_path: str, subs: list[tuple[str, str]]):
     with open(out_path, 'w') as f:
         f.write(text)
 
-def install_unit_files(environment: str) -> list[str]:
+def install_unit_files(environment: str) -> list:
     managrams_name = f'mirrorbot-managrams-{environment}'
     # managrams
     install_template(
@@ -44,7 +44,7 @@ def install_unit_files(environment: str) -> list[str]:
     )
     return [f'{managrams_name}.timer', f'{sync_name}.timer']
 
-def enable_units(units: list[str]):
+def enable_units(units: list):
     subprocess.run(["sudo", "systemctl", "daemon-reload"]).check_returncode()
     for unit in units:
         subprocess.run(["sudo", "systemctl", "enable", unit]).check_returncode()
