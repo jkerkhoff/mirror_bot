@@ -53,6 +53,7 @@ pub fn mirror_question(
 
 /// Attempt to mirror a Kalshi question.
 /// Does not check configurable question requirements.
+/// Will error if given a multimarket.
 pub fn mirror_kalshi_question(
     client: &Client,
     db: &rusqlite::Connection,
@@ -64,14 +65,7 @@ pub fn mirror_kalshi_question(
         kalshi_market.id(),
         kalshi_market.title()
     );
-    let kalshi_market =
-        kalshi::get_question(client, &kalshi_market.id(), config).with_context(|| {
-            format!(
-                "failed to fetch Kalshi question with id {}",
-                kalshi_market.id()
-            )
-        })?;
-    let question: Question = (&kalshi_market)
+    let question: Question = kalshi_market
         .try_into()
         .with_context(|| "failed to convert Kalshi question to common format")?;
     Ok(mirror_question(client, db, &question, config)?)

@@ -82,8 +82,8 @@ pub fn get_mirror_candidates(client: &Client, config: &Settings) -> Result<Vec<K
     info!("{} events listed via Kalshi API", events.len());
     let markets = events
         .into_iter()
-        .map(|event| (&event).try_into())
-        .filter_map(Result::ok)
+        .filter(|e| !e.is_multimarket())
+        .filter_map(|event| (&event).try_into().ok())
         .filter(|q| check_market_requirements(q, requirements).is_ok())
         .collect::<Vec<KalshiMarket>>();
 
@@ -300,16 +300,25 @@ impl KalshiMarket {
     }
 }
 
+impl Event {
+    pub fn is_multimarket(&self) -> bool {
+        // If the market's ticker doesn't match the event's, then Kalshi might
+        // add new markets to the event going forward, which is unsupported
+        return self.markets.len() != 1 || self.markets[0].ticker_name != self.ticker;
+    }
+}
+
 impl TryInto<KalshiMarket> for &Event {
     type Error = KalshiError;
 
     fn try_into(self) -> Result<KalshiMarket, KalshiError> {
-        // We're only supporting single market Kalshi events at this time, and
-        // assuming the try_into can only fail in this way
-        if self.markets.len() != 1 {
+        // This check shouldn't be true in auto-mirror, since the event list is
+        // already filtering multimarkets out before the conversion.
+        if self.is_multimarket() {
             return Err(KalshiError::OnlySingleMarketsSupported(self.markets.len()));
         }
         let mut market = self.markets[0].clone();
+
         market.series_ticker = self.series_ticker.clone();
         market.underlying = self.underlying.clone();
         market.settlement_sources = self.settlement_sources.clone();
@@ -466,7 +475,7 @@ pub enum KalshiError {
     ErrorResponse(StatusCode, KalshiErrorResponse),
     #[error("error response ({}) from Kalshi: {}", .0, .1.message)]
     NotFound(StatusCode, KalshiErrorResponse),
-    #[error("Only events with exactly one market are currently supported ({} found)", .0)]
+    #[error("Only events with exactly one market (and with matching tickers) are currently supported ({} found)", .0)]
     OnlySingleMarketsSupported(usize),
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
