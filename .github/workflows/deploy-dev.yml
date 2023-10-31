@@ -1,0 +1,41 @@
+name: Deploy
+on:
+  # workflow_run:
+  #   workflows: [Build]
+  #   types: [completed]
+  #   branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to dev
+    runs-on: ubuntu-20.04
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Build
+      run: cargo build --release
+
+    - name: Create SSH key
+      run: |
+        mkdir -p ~/.ssh/
+        echo "$DEPLOY_SSH_KEY" > ~/.ssh/private_key
+        chmod 600 ~/.ssh/private_key
+        echo "$DEPLOY_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      shell: bash
+      env:
+        DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+
+    - name: Deploy (dev)
+      run: |
+        ssh -i ~/.ssh/private_key "deploy@$DEPLOY_HOST" 'sudo mkdir -p /srv/mirrorbot/dev && sudo chown -R deploy:mirrorbot /srv/mirrorbot && sudo chmod g+rwx -R /srv/mirrorbot/'
+        scp -ir ~/.ssh/private_key target/release/mirror_bot config.toml dev-config.toml deploy "deploy@$DEPLOY_HOST:/srv/mirrorbot/dev/"
+        ssh -i ~/.ssh/private_key "deploy@$DEPLOY_HOST" '\
+          cd /srv/mirrorbot/dev/deploy && \
+          python3 install.py dev'
+      shell: bash
+      env:
+        DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
