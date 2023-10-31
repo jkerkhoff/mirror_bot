@@ -23,7 +23,7 @@ def install_unit_files(environment: str) -> list[str]:
     install_template(
         'managrams.service.tmpl', 
         f'{SYSTEMD_UNITS_PATH}{managrams_name}.service', 
-        ('ENVIRONMENT': environment,)
+        (('ENVIRONMENT', environment),)
     )
     install_template(
         'managrams.timer.tmpl', 
@@ -35,7 +35,7 @@ def install_unit_files(environment: str) -> list[str]:
     install_template(
         'sync.service.tmpl', 
         f'{SYSTEMD_UNITS_PATH}{sync_name}.service', 
-        ('ENVIRONMENT': environment, 'MANAGRAMS_SERVICE': f'{managrams_name}.service')
+        (('ENVIRONMENT', environment), ('MANAGRAMS_SERVICE', f'{managrams_name}.service'))
     )
     install_template(
         'sync.timer.tmpl', 
