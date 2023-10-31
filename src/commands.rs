@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, Context, Result};
-use log::{info, warn};
+use log::{error, info, warn};
 use reqwest::blocking::Client;
 
 use crate::args::{self, Commands, ListCommands};
@@ -111,11 +111,19 @@ pub fn mirror_question(
                     return Err(anyhow!("question has already resolved"));
                 }
             }
-            let question = (&kalshi_question)
-                .try_into()
-                .with_context(|| "failed to convert Kalshi question to common format")?;
-            let row = mirror::mirror_question(&client, &db, &question, config)?;
-            println!("Mirrored question:\n{:#?}", row);
+            match mirror::mirror_kalshi_question(&client, &db, config, &kalshi_question)
+                .with_context(|| {
+                    format!(
+                        "failed to mirror question with id {} (\"{}\")",
+                        kalshi_question.id(),
+                        kalshi_question.title()
+                    )
+                }) {
+                Ok(market) => {
+                    info!("Created a mirror:\n{:#?}", market);
+                }
+                Err(e) => error!("{:#}", e),
+            }
         }
         QuestionSource::Polymarket => {
             bail!("Polymarket mirroring hasn't been implemented yet");
