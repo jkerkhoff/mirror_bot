@@ -32,7 +32,7 @@ jobs:
     - name: Deploy (dev)
       run: |
         ssh -i ~/.ssh/private_key "deploy@$DEPLOY_HOST" 'sudo mkdir -p /srv/mirrorbot/dev && sudo chown -R deploy:mirrorbot /srv/mirrorbot && sudo chmod g+rwx -R /srv/mirrorbot/'
-        scp -ir ~/.ssh/private_key config.toml dev-config.toml deploy "deploy@$DEPLOY_HOST:/srv/mirrorbot/dev/"
+        scp -i ~/.ssh/private_key config.toml dev-config.toml -r deploy "deploy@$DEPLOY_HOST:/srv/mirrorbot/dev/"
         ssh -i ~/.ssh/private_key "deploy@$DEPLOY_HOST" '\
           cd /srv/mirrorbot/dev/deploy && \
           python3 install.py dev'
