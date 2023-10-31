@@ -35,7 +35,7 @@ jobs:
         scp -r -i ~/.ssh/private_key config.toml dev-config.toml deploy "deploy@$DEPLOY_HOST:/srv/mirrorbot/dev/"
         ssh -i ~/.ssh/private_key "deploy@$DEPLOY_HOST" '\
           cd /srv/mirrorbot/dev/deploy && \
-          python3 install.py dev'
+          sudo python3 install.py dev'
       shell: bash
       env:
         DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
