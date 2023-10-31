@@ -1,0 +1,11 @@
+[Unit]
+Description=Process mirrorbot managrams
+
+[Service]
+Type=oneshot
+ExecStart=/srv/mirrorbot/{{ENVIRONMENT}}/mirror_bot process-managrams
+WorkingDirectory=/srv/mirrorbot/{{ENVIRONMENT}}/
+User=mirrorbot
+
+[Install]
+WantedBy=multi-user.target

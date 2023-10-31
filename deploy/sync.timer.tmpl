@@ -1,0 +1,9 @@
+[Unit]
+Description=Do a full sync every 4 hours
+
+[Timer]
+OnUnitActiveSec=4h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
