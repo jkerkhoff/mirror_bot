@@ -9,6 +9,8 @@ ExecStart=/srv/mirrorbot/{{ENVIRONMENT}}/mirror_bot auto-mirror metaculus
 ExecStart=/srv/mirrorbot/{{ENVIRONMENT}}/mirror_bot auto-mirror kalshi
 WorkingDirectory=/srv/mirrorbot/{{ENVIRONMENT}}/
 User=mirrorbot
+StandardOutput=append:/srv/mirrorbot/{{ENVIRONMENT}}/log
+StandardError=inherit
 
 [Install]
 WantedBy=multi-user.target
