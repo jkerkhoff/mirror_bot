@@ -21,7 +21,7 @@ fn main() -> Result<(), anyhow::Error> {
 
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
-        .with(fmt::layer().json())
+        .with(fmt::layer().json().flatten_event(true))
         .init();
 
     let config = settings::Settings::new()?;
