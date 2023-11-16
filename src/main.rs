@@ -1,6 +1,8 @@
 use anyhow::Result;
 use args::Cli;
 use clap::Parser;
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::{fmt, EnvFilter};
 
 mod args;
 mod commands;
@@ -16,7 +18,11 @@ mod util;
 
 fn main() -> Result<(), anyhow::Error> {
     dotenvy::dotenv().ok();
-    env_logger::builder().format_indent(Some(4)).init();
+
+    tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(fmt::layer().json())
+        .init();
 
     let config = settings::Settings::new()?;
     let args = Cli::parse();
