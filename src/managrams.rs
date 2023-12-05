@@ -1,7 +1,7 @@
 use crate::{
     db::{self, AnyMirror, MirrorRow},
     log_if_err,
-    manifold::{self, GetManagramsArgs, Managram, SendManagramArgs},
+    manifold::{self, GetManagramsArgs, Managram, ManifoldError, SendManagramArgs},
     metaculus, mirror,
     settings::Settings,
     types::QuestionSource,
@@ -9,7 +9,7 @@ use crate::{
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use log::{debug, info, warn};
-use reqwest::{blocking::Client, Url};
+use reqwest::{blocking::Client, StatusCode, Url};
 
 /// Fetch managrams from manifold and save to db for processing.
 pub fn sync_managrams(client: &Client, db: &rusqlite::Connection, config: &Settings) -> Result<()> {
@@ -105,6 +105,9 @@ fn process_managram_command(
         ManagramCommands::Mirror(args) => {
             process_managram_mirror_command(client, db, config, managram, args)
         }
+        ManagramCommands::Resolve(args) => {
+            process_managram_resolve_command(client, db, config, managram, args)
+        }
         ManagramCommands::Ping => {
             info!(
                 "Managram ping received (id: {}, user id: {})",
@@ -124,6 +127,73 @@ fn process_managram_command(
                 .map_err(|e| ManagramProcessingError::Internal(e))
         }
     }
+}
+
+fn process_managram_resolve_command(
+    client: &Client,
+    db: &rusqlite::Connection,
+    config: &Settings,
+    managram: &Managram,
+    ResolveArgs { target }: ResolveArgs,
+) -> Result<(), ManagramProcessingError> {
+    info!(
+        "Processing managram resolve command. \
+        Managram id: {}. From id: {}. Target: {:?}.",
+        managram.id, managram.from_id, target
+    );
+    let cfg = &config.manifold.managrams;
+    let required_amount = cfg.resolve_cost + cfg.min_amount;
+    if managram.amount < required_amount {
+        return Err(ManagramProcessingError::UserFacing(format!(
+            "Resolve requests should include at least {} mana.",
+            required_amount
+        )));
+    }
+    let market_id = match target {
+        MarketIdentifier::Id(id) => id,
+        MarketIdentifier::Slug(slug) => match manifold::get_market_by_slug(client, &slug, config) {
+            Ok(market) => {
+                if market.author_id != config.manifold.user_id {
+                    return Err(ManagramProcessingError::UserFacing(
+                        "Market was not created by this bot".to_string(),
+                    ));
+                }
+                if market.is_resolved {
+                    return Err(ManagramProcessingError::UserFacing(
+                        "Market is already resolved".to_string(),
+                    ));
+                }
+                market.id
+            }
+            Err(ManifoldError::ErrorResponse(StatusCode::NOT_FOUND, _)) => {
+                return Err(ManagramProcessingError::UserFacing(
+                    "Market not found".to_string(),
+                ))
+            }
+            Err(error) => return Err(ManagramProcessingError::Internal(error.into())),
+        },
+    };
+    let market_row = match db::get_mirror_by_contract_id(db, &market_id) {
+        Ok(Some(market)) => market,
+        Ok(None) => {
+            return Err(ManagramProcessingError::UserFacing(
+                "Market not in bot database".to_string(),
+            ))
+        }
+        Err(error) => return Err(ManagramProcessingError::Internal(error.into())),
+    };
+    let resolved = match mirror::sync_mirror(client, db, &market_row, config) {
+        Ok(resolved) => resolved,
+        Err(error) => return Err(ManagramProcessingError::Internal(error.into())),
+    };
+    let response = if resolved {
+        "Resolved market!"
+    } else {
+        "Source question has not resolved yet"
+    };
+    respond_to_managram(client, config, managram, ResponseAmount::Refund, response)
+        .map_err(|e| ManagramProcessingError::Internal(e))?;
+    Ok(())
 }
 
 fn process_managram_mirror_command(
@@ -267,11 +337,53 @@ struct ManagramArgs {
 enum ManagramCommands {
     /// Request a mirror for a specific question
     Mirror(MirrorArgs),
+    /// Request resolution for a mirror of resolved source
+    Resolve(ResolveArgs),
     /// Responds "Pong!", for testing purposes
     Ping,
     /// Anything else
     #[command(external_subcommand)]
     None(Vec<String>),
+}
+
+#[derive(Debug, Parser)]
+struct ResolveArgs {
+    /// Market to resolve (url)
+    #[arg(value_parser = MarketIdentifier::parse_arg)]
+    target: MarketIdentifier,
+}
+
+#[derive(Debug, Clone)]
+enum MarketIdentifier {
+    Id(String),
+    Slug(String),
+}
+
+impl MarketIdentifier {
+    fn parse_arg(s: &str) -> Result<Self, String> {
+        // TODO: allow id/slug as input
+        let url: Url = s.parse().map_err(|_| "Invalid url".to_string())?;
+        match url.host_str() {
+            Some("manifold.markets") => {}
+            Some("dev.manifold.markets") => {}
+            _ => return Err("invalid Manifold host".to_string()),
+        }
+        let manifold_error = "Failed to parse Manifold market url";
+        let mut path = url.path_segments().ok_or(manifold_error.to_string())?;
+        if path.next().is_none() {
+            return Err(manifold_error.to_string());
+        }
+        // validate slug
+        let slug = path.next().ok_or("Missing market slug".to_string())?;
+        if !slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            || slug.len() > 100
+        {
+            return Err("Invalid market slug".to_string());
+        }
+        Ok(Self::Slug(slug.to_string()))
+    }
 }
 
 #[derive(Debug, Parser)]

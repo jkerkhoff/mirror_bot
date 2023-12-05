@@ -305,15 +305,6 @@ pub enum AnyMirror {
     ThirdPartyMirror(ThirdPartyMirrorRow),
 }
 
-impl AnyMirror {
-    pub fn manifold_url(&self) -> &str {
-        match self {
-            AnyMirror::Mirror(m) => &m.manifold_url,
-            AnyMirror::ThirdPartyMirror(m) => &m.manifold_url,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct MirrorRow {
     pub id: i64,

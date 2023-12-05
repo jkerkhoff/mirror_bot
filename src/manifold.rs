@@ -118,6 +118,20 @@ pub fn get_market(
     parse_response(resp)
 }
 
+/// Fetch market info by contract slug
+pub fn get_market_by_slug(
+    client: &Client,
+    slug: &str,
+    config: &Settings,
+) -> Result<FullMarket, ManifoldError> {
+    debug!("get_market_by_slug called with slug = {}", slug);
+    let endpoint = get_api_url(config)
+        .join(&format!("slug/{}/", slug))
+        .expect("endpoint URL should be a valid URL");
+    let resp = add_auth(client.get(endpoint), config).send()?;
+    parse_response(resp)
+}
+
 /// Fetch all markets in a group/topic
 pub fn get_group_markets(
     client: &Client,
@@ -234,6 +248,7 @@ pub struct LiteMarket {
 #[serde(rename_all = "camelCase")]
 pub struct FullMarket {
     pub id: String,
+    pub author_id: String,
     pub question: String,
     pub slug: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]

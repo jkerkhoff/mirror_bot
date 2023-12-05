@@ -69,6 +69,8 @@ pub struct Managrams {
     pub min_amount: f64,
     /// amount we want to charge people for mirroring
     pub mirror_cost: f64,
+    /// amount we charge people to request a resolve check
+    pub resolve_cost: f64,
 }
 
 #[derive(Debug, Deserialize)]

@@ -278,7 +278,7 @@ fn sync_metaculus_mirror(
 }
 
 /// Check if source resolved and sync resolution to Manifold
-fn sync_mirror(
+pub fn sync_mirror(
     client: &Client,
     db: &rusqlite::Connection,
     mirror: &MirrorRow,
