@@ -248,7 +248,7 @@ pub struct LiteMarket {
 #[serde(rename_all = "camelCase")]
 pub struct FullMarket {
     pub id: String,
-    pub author_id: String,
+    pub creator_id: String,
     pub question: String,
     pub slug: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]

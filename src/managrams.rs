@@ -153,7 +153,7 @@ fn process_managram_resolve_command(
         MarketIdentifier::Id(id) => id,
         MarketIdentifier::Slug(slug) => match manifold::get_market_by_slug(client, &slug, config) {
             Ok(market) => {
-                if market.author_id != config.manifold.user_id {
+                if market.creator_id != config.manifold.user_id {
                     return Err(ManagramProcessingError::UserFacing(
                         "Market was not created by this bot".to_string(),
                     ));
