@@ -44,6 +44,7 @@ max_description_length = 16000
 [manifold.managrams]
 min_amount = 10.0
 mirror_cost = 50.0
+resolve_cost = 0.0
 
 [metaculus]
 url = "https://www.metaculus.com/"
