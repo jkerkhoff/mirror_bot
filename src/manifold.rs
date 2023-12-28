@@ -281,7 +281,7 @@ pub trait ManifoldMarket {
     fn slug(&self) -> &String;
 
     fn url(&self, config: &Settings) -> String {
-        get_manifold_url(config)
+        get_client_url(config)
             .join("market/")
             .unwrap()
             .join(self.slug())
@@ -408,12 +408,14 @@ pub struct ManifoldErrorResponse {
     message: String,
 }
 
-fn get_manifold_url(config: &Settings) -> Url {
-    Url::parse(&config.manifold.url).expect("MANIFOLD_URL should be a valid URL")
+/// Base url for Manifold web client
+fn get_client_url(config: &Settings) -> Url {
+    Url::parse(&config.manifold.client_url).expect("MANIFOLD_CLIENT_URL should be a valid URL")
 }
 
+/// Base url for Manifold api requests
 fn get_api_url(config: &Settings) -> Url {
-    get_manifold_url(config).join("api/v0/").unwrap()
+    Url::parse(&config.manifold.api_url).expect("MANIFOLD_API_URL should be a valid URL")
 }
 
 fn add_auth(req: RequestBuilder, config: &Settings) -> RequestBuilder {

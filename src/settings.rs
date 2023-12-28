@@ -75,8 +75,9 @@ pub struct Managrams {
 
 #[derive(Debug, Deserialize)]
 pub struct Manifold {
-    pub url: String,
+    pub api_url: String,
     pub api_key: String,
+    pub client_url: String,
     pub user_id: String,
     pub template: MarketTemplate,
     pub managrams: Managrams,

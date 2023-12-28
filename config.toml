@@ -26,8 +26,9 @@ max_confidence = 0.92
 exclude_ids = []
 
 [manifold]
-url = "https://manifold.markets/"
+api_url = "https://api.manifold.markets/v0/"
 api_key = "SECRET"  # overridden by MB_MANIFOLD.API_KEY env variable
+client_url = "https://manifold.markets/"
 user_id = "PQ8Ot2GZ8NfQdXiJVmJqf3yea8O2"  # mirrorbot
 
 [manifold.template]

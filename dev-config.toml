@@ -11,7 +11,8 @@ add_group_ids = [
 exclude_ids = []
 
 [manifold]
-url = "https://dev.manifold.markets/"
+api_url = "https://api.dev.manifold.markets/v0/"
+client_url = "https://dev.manifold.markets/"
 user_id = "Lx20DndIKqYBDrAdJz5geUeZnRz1"  # mirrorbot on dev
 
 [metaculus]
