@@ -75,4 +75,11 @@ pub enum Commands {
     /// Process managram requests
     #[command()]
     ProcessManagrams,
+    /// Mirror all eligible questions in a Metaculus project (admin only)
+    #[command()]
+    MirrorMetaculusProject {
+        project_id: u64,
+        header: String,
+        group_id: String,
+    },
 }

@@ -1,11 +1,13 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Ok, Result};
 use log::{info, warn};
 use reqwest::blocking::Client;
+use rusqlite::Connection;
 
 use crate::args::{self, Commands, ListCommands};
 use crate::manifold::{self, SendManagramArgs};
+use crate::metaculus::{MetaculusListQuestionsParams, MetaculusQuestion};
 use crate::settings::Settings;
-use crate::types::QuestionSource;
+use crate::types::{Question, QuestionSource};
 use crate::{db, kalshi, log_if_err, managrams, metaculus, mirror};
 
 pub(crate) fn run_command(
@@ -41,6 +43,11 @@ pub(crate) fn run_command(
             to_id,
             message,
         } => send_managram(&config, amount, to_id, message),
+        Commands::MirrorMetaculusProject {
+            project_id,
+            header,
+            group_id,
+        } => mirror_metaculus_project(&config, project_id, header, group_id),
         Commands::ProcessManagrams => process_managrams(&config),
     }
 }
@@ -117,6 +124,73 @@ pub fn mirror_question(
             bail!("Polymarket mirroring hasn't been implemented yet");
         }
     }
+    Ok(())
+}
+
+// NOTE: this implementation is trash, basically a one-off for ACX2024 mirrors
+fn mirror_metaculus_project(
+    config: &Settings,
+    project_id: u64,
+    header: String,
+    group_id: String,
+) -> Result<()> {
+    let client = Client::new();
+    let db = db::open(&config)?;
+
+    let project_questions = metaculus::get_questions(
+        &client,
+        MetaculusListQuestionsParams {
+            project: Some(project_id.to_string()),
+            r#type: Some(metaculus::QuestionType::Forecast),
+            forecast_type: Some("binary".to_string()),
+            ..Default::default()
+        },
+        config,
+    )
+    .with_context(|| "failed to fetch project questions from Metaculus")?;
+
+    for question in project_questions {
+        log_if_err!(mirror_metaculus_project_question(
+            config, &client, &db, &header, &group_id, question
+        ))
+    }
+
+    Ok(())
+}
+
+// garbage code close your eyes
+fn mirror_metaculus_project_question(
+    config: &Settings,
+    client: &Client,
+    db: &Connection,
+    header: &String,
+    group_id: &String,
+    question: MetaculusQuestion,
+) -> Result<()> {
+    info!(
+        "mirroring project question with id {} (\"{}\")",
+        question.id, question.title
+    );
+
+    // fetch criteria
+    let question = metaculus::get_question(client, &question.id.to_string(), config)?;
+    let question: Question = (&question)
+        .try_into()
+        .with_context(|| "failed to convert Metaculus question to common format")?;
+
+    if let Some(mirror) = db::get_mirror_by_source_id(&db, &question.source, &question.source_id)? {
+        bail!("Already mirrored: {:?}", mirror);
+    }
+
+    let mut market_args = manifold::CreateMarketArgs::from_question(config, &question);
+    market_args.question = market_args
+        .question
+        .replace("[Metaculus]", &format!("[{}]", header));
+    market_args.group_ids.push(group_id.to_string());
+
+    let market = manifold::create_market(client, market_args, config)?;
+    let mirror_row = db::insert_mirror(db, &market, &question, config)?;
+    info!("Created mirror: {:#?}", mirror_row);
     Ok(())
 }
 
