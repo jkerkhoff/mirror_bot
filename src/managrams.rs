@@ -249,6 +249,7 @@ fn process_managram_mirror_command(
         }
         QuestionSource::Kalshi => todo!(),
         QuestionSource::Polymarket => todo!(),
+        QuestionSource::Manual => panic!("Manual market should never appear in mirror request"),
     };
     db::set_managram_processed(db, &managram.id, true)
         .map_err(|e| ManagramProcessingError::Internal(e))?;

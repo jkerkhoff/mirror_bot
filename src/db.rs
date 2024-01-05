@@ -382,6 +382,7 @@ impl FromSql for QuestionSource {
             "KALSHI" => Self::Kalshi,
             "METACULUS" => Self::Metaculus,
             "POLYMARKET" => Self::Polymarket,
+            "MANUAL" => Self::Manual,
             _ => return Err(FromSqlError::InvalidType),
         })
     }

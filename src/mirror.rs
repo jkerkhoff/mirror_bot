@@ -294,6 +294,7 @@ pub fn sync_mirror(
         }
         crate::types::QuestionSource::Kalshi => sync_kalshi_mirror(client, db, &mirror, config)?,
         crate::types::QuestionSource::Polymarket => todo!(),
+        crate::types::QuestionSource::Manual => false,
     })
 }
 

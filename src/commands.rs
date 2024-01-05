@@ -123,6 +123,9 @@ pub fn mirror_question(
         QuestionSource::Polymarket => {
             bail!("Polymarket mirroring hasn't been implemented yet");
         }
+        QuestionSource::Manual => {
+            bail!("Manual markets are not mirrors");
+        }
     }
     Ok(())
 }
@@ -252,6 +255,7 @@ pub fn auto_mirror(config: &Settings, source: QuestionSource, dry_run: bool) -> 
         QuestionSource::Polymarket => {
             todo!()
         }
+        QuestionSource::Manual => {}
     }
     Ok(())
 }

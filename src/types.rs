@@ -28,6 +28,8 @@ pub enum QuestionSource {
     Kalshi,
     Metaculus,
     Polymarket,
+    /// Question created manually, not managed by the bot
+    Manual,
 }
 
 impl Question {
@@ -42,6 +44,7 @@ impl Question {
             }
             QuestionSource::Kalshi => None,
             QuestionSource::Polymarket => None,
+            QuestionSource::Manual => None,
         }
     }
 }
@@ -52,6 +55,7 @@ impl Display for QuestionSource {
             QuestionSource::Kalshi => "Kalshi",
             QuestionSource::Metaculus => "Metaculus",
             QuestionSource::Polymarket => "Polymarket",
+            QuestionSource::Manual => "Manual",
         })?;
         Ok(())
     }

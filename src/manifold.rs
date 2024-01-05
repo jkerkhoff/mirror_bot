@@ -507,6 +507,7 @@ impl CreateMarketArgs {
             QuestionSource::Polymarket => {
                 todo!()
             }
+            QuestionSource::Manual => {}
         }
         group_ids
     }
