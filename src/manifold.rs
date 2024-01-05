@@ -132,6 +132,48 @@ pub fn get_market_by_slug(
     parse_response(resp)
 }
 
+/// Fetch markets, manual pagination
+pub fn get_markets(
+    client: &Client,
+    args: &GetMarketsArgs,
+    config: &Settings,
+) -> Result<Vec<LiteMarket>, ManifoldError> {
+    debug!("get_markets called with args = {:?}", args);
+    let endpoint = get_api_url(config)
+        .join("markets/")
+        .expect("endpoint URL should be a valid URL");
+    let resp = add_auth(client.get(endpoint), config).query(args).send()?;
+    parse_response(resp)
+}
+
+/// Same as [`get_markets`], but handles pagination
+pub fn get_markets_depaginated(
+    client: &Client,
+    mut args: GetMarketsArgs,
+    config: &Settings,
+) -> Result<Vec<LiteMarket>, ManifoldError> {
+    debug!("get_markets_depaginated called with args = {:?}", args);
+    let mut markets = Vec::new();
+    loop {
+        let mut batch = get_markets(client, &args, config)?;
+        let batch_size = batch.len();
+        debug!("get_markets returned {} items", batch_size);
+        markets.append(&mut batch);
+        if batch_size < args.limit.unwrap_or(500) {
+            break;
+        } else {
+            args.before = Some(
+                markets
+                    .last()
+                    .expect("markets should never be empty here")
+                    .id
+                    .to_owned(),
+            );
+        }
+    }
+    Ok(markets)
+}
+
 /// Fetch all markets in a group/topic
 pub fn get_group_markets(
     client: &Client,
@@ -203,6 +245,26 @@ pub struct GetManagramsArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "chrono::serde::ts_milliseconds_option")]
     pub after: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetMarketsArgs {
+    /// server side max 1000, default 500
+    #[serde(skip_serializing_if = "Option::is_none")] // TODO: check if I need all these skips
+    pub limit: Option<usize>,
+    /// default created-time
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort: Option<String>, // TODO: enum?
+    /// default desc
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<String>, // TODO: enum?
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<String>,
 }
 
 /// Send a managram
