@@ -9,7 +9,7 @@ use crate::{
     db::{self, MirrorRow},
     kalshi::{self, KalshiMarket},
     log_if_err,
-    manifold::{self, CreateMarketArgs, ManifoldMarket},
+    manifold::{self, CreateMarketArgs, GetMarketsArgs, ManifoldMarket},
     metaculus::{self, MetaculusQuestion},
     settings::Settings,
     types::{BinaryResolution, Question, QuestionSource},
@@ -394,9 +394,16 @@ fn sync_third_party_metaculus_mirrors_from_group(
     group_id: &str,
     pattern: &Regex,
 ) -> Result<(), MirrorError> {
-    for market in manifold::get_group_markets(client, group_id, config)?
-        .iter()
-        .filter(|m| !m.is_resolved)
+    for market in manifold::get_markets_depaginated(
+        client,
+        GetMarketsArgs {
+            group_id: Some(group_id.to_owned()),
+            ..Default::default()
+        },
+        config,
+    )?
+    .iter()
+    .filter(|m| !m.is_resolved)
     {
         if db::get_third_party_mirror_by_contract_id(db, &market.id)?.is_some() {
             continue;

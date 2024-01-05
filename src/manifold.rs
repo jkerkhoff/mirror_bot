@@ -174,20 +174,6 @@ pub fn get_markets_depaginated(
     Ok(markets)
 }
 
-/// Fetch all markets in a group/topic
-pub fn get_group_markets(
-    client: &Client,
-    group_id: &str,
-    config: &Settings,
-) -> Result<Vec<LiteMarket>, ManifoldError> {
-    debug!("get_group_markets called with group_id = {}", group_id);
-    let endpoint = get_api_url(config)
-        .join(&format!("group/by-id/{}/markets/", group_id))
-        .expect("endpoint URL should be a valid URL");
-    let resp = add_auth(client.get(endpoint), config).send()?;
-    parse_response(resp)
-}
-
 /// Fetch managrams, reverse-chronological, manual pagination
 pub fn get_managrams(
     client: &Client,
