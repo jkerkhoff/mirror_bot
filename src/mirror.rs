@@ -1,6 +1,8 @@
+use std::collections::HashSet;
+
 use anyhow::Context;
 use chrono::{Duration, Utc};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use regex::Regex;
 use reqwest::blocking::Client;
 use thiserror::Error;
@@ -324,37 +326,42 @@ pub fn sync_manifold_to_db(
     config: &Settings,
 ) -> Result<(), MirrorError> {
     info!("Syncing Manifold state to database.");
-    for mirror in db::get_mirrors(db)? {
-        if let Err(e) = sync_manifold_mirror_to_db(client, db, &mirror, config).with_context(|| {
-            format!(
-                "failed to sync Manifold market state to db for market with row id {}",
-                mirror.id
-            )
-        }) {
-            error!("{:#}", e);
+
+    info!("Fetching markets from Manifold.");
+    let markets = manifold::get_markets_depaginated(
+        client,
+        GetMarketsArgs {
+            user_id: Some(config.manifold.user_id.clone()),
+            ..Default::default()
+        },
+        config,
+    )?;
+
+    info!("Syncing to database.");
+    for market in markets.iter() {
+        if let Some(row) = db::get_mirror_by_contract_id(db, &market.id)? {
+            if row.resolved != market.is_resolved {
+                info!(
+                    "Updating resolution state ({} -> {}) for mirror with row id {} (\"{}\")",
+                    row.resolved, market.is_resolved, row.id, row.question
+                );
+                db::set_mirror_resolved(db, row.id, market.is_resolved)?;
+            }
+        } else {
+            warn!(
+                "Manifold market with id {} (\"{}\") missing from database.",
+                market.id, market.question
+            );
         }
     }
-    Ok(())
-}
-
-/// Ensure database state matches Manifold for mirror
-fn sync_manifold_mirror_to_db(
-    client: &Client,
-    db: &rusqlite::Connection,
-    mirror: &MirrorRow,
-    config: &Settings,
-) -> Result<(), MirrorError> {
-    debug!(
-        "Syncing mirror with row id {} (\"{}\") to database.",
-        mirror.id, mirror.question
-    );
-    let manifold_market = manifold::get_market(client, &mirror.manifold_contract_id, config)?;
-    if mirror.resolved != manifold_market.is_resolved {
-        info!(
-            "Updating resolution state ({} -> {}) for mirror with row id {} (\"{}\")",
-            mirror.resolved, manifold_market.is_resolved, mirror.id, mirror.question
-        );
-        db::set_mirror_resolved(db, mirror.id, manifold_market.is_resolved)?;
+    // TODO: if we want to resolve markets not owned by our account, we'll need to sync those too
+    info!("Checking for ghost markets in database.");
+    let market_ids: HashSet<String> = markets.iter().map(|m| m.id.clone()).collect();
+    for row in db::get_mirrors(db)?
+        .into_iter()
+        .filter(|r| !market_ids.contains(&r.manifold_contract_id))
+    {
+        warn!("Database contains reference to manifold market with id {} (\"{}\"), which does not exist or is not owned by us.", row.manifold_contract_id, row.question);
     }
     Ok(())
 }
