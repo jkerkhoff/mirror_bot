@@ -49,7 +49,16 @@ pub(crate) fn run_command(
             group_id,
         } => mirror_metaculus_project(&config, project_id, header, group_id),
         Commands::ProcessManagrams => process_managrams(&config),
+        Commands::RegisterManualMarkets => register_manual_markets(&config),
     }
+}
+
+// TODO: registering individual market
+fn register_manual_markets(config: &Settings) -> Result<()> {
+    let client = Client::new();
+    let db = db::open(&config)?;
+    mirror::register_existing_manual_markets(&client, &db, config)?;
+    Ok(())
 }
 
 pub fn process_managrams(config: &Settings) -> Result<()> {

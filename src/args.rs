@@ -82,4 +82,7 @@ pub enum Commands {
         header: String,
         group_id: String,
     },
+    /// Register unknown markets on our account as manually managed
+    #[command()]
+    RegisterManualMarkets,
 }

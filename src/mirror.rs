@@ -11,7 +11,7 @@ use crate::{
     db::{self, MirrorRow},
     kalshi::{self, KalshiMarket},
     log_if_err,
-    manifold::{self, CreateMarketArgs, GetMarketsArgs, ManifoldMarket},
+    manifold::{self, CreateMarketArgs, GetMarketsArgs, LiteMarket, ManifoldMarket},
     metaculus::{self, MetaculusQuestion},
     settings::Settings,
     types::{BinaryResolution, Question, QuestionSource},
@@ -315,6 +315,53 @@ pub fn sync_resolutions_to_manifold(
                 row.id
             )
         }));
+    }
+    Ok(())
+}
+
+/// Register a Manifold market as manually created/managed
+pub fn register_manual_market(
+    db: &rusqlite::Connection,
+    config: &Settings,
+    market: &LiteMarket,
+) -> Result<(), MirrorError> {
+    let question = Question {
+        source: QuestionSource::Manual,
+        source_url: market.url(config),
+        source_id: market.id.clone(),
+        question: market.question.clone(),
+        criteria: None,
+        end_date: market.close_time.clone(),
+    };
+    db::insert_mirror(db, market, &question, config)?;
+    Ok(())
+}
+
+/// Register unknown markets on our Manifold account as manually created
+pub fn register_existing_manual_markets(
+    client: &Client,
+    db: &rusqlite::Connection,
+    config: &Settings,
+) -> Result<(), MirrorError> {
+    info!("Fetching markets from Manifold.");
+    let markets = manifold::get_markets_depaginated(
+        client,
+        GetMarketsArgs {
+            user_id: Some(config.manifold.user_id.clone()),
+            ..Default::default()
+        },
+        config,
+    )?;
+
+    info!("Registering unknown markets as manually created.");
+    for market in markets {
+        if db::get_mirror_by_contract_id(db, &market.id)?.is_none() {
+            info!(
+                "Registering market with id {} (\"{}\")",
+                market.id, market.question
+            );
+            log_if_err!(register_manual_market(db, config, &market));
+        }
     }
     Ok(())
 }
