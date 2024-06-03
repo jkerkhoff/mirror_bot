@@ -44,14 +44,14 @@ max_description_length = 16000
 
 [manifold.managrams]
 min_amount = 10.0
-mirror_cost = 50.0
+mirror_cost = 1000.0
 resolve_cost = 0.0
 
 [metaculus]
 url = "https://www.metaculus.com/"
 api_key = "SECRET"  # overridden by MB_METACULUS.API_KEY env variable
 fetch_criteria = true  # when auto-mirroring, fetch resolution criteria for each question
-max_clones_per_day = 10
+max_clones_per_day = 3
 add_group_ids = [
     "5mFuwp5QX0sdZYdNq3Jx", # Metaculus
 ]
@@ -71,7 +71,7 @@ max_confidence = 0.97
 exclude_ids = [18177, 18170, 18606, 18233, 18992, 18393, 18865]
 
 [metaculus.request_filter]
-require_visible_community_prediction = false
+require_visible_community_prediction = true
 require_open = false
 exclude_resolved = true
 exclude_grouped = false

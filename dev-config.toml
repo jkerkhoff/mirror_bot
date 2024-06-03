@@ -17,7 +17,7 @@ user_id = "Lx20DndIKqYBDrAdJz5geUeZnRz1"  # mirrorbot on dev
 
 [metaculus]
 fetch_criteria = true
-max_clones_per_day = 10
+max_clones_per_day = 5
 add_group_ids = [
     "530445d6-2fda-41dd-8faf-5a7a598e834e"  # Metaculus on dev
 ]
