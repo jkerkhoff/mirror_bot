@@ -77,7 +77,7 @@ pub fn resolve_market(
     market_id: &str,
     resolution: ManifoldResolution,
     config: &Settings,
-) -> Result<LiteMarket, ManifoldError> {
+) -> Result<ManifoldStubResponse, ManifoldError> {
     debug!(
         "resolve_market called with market_id = {}, resolution = {:?}",
         market_id, resolution
@@ -453,6 +453,12 @@ impl From<BinaryResolution> for ManifoldResolution {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ManifoldErrorResponse {
+    message: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManifoldStubResponse {
     message: String,
 }
 
